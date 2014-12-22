@@ -24,6 +24,7 @@ from google.appengine.ext import testbed
 from google.appengine.runtime import apiproxy_errors
 
 import oauth_token_manager
+import tests
 import twitter_fetcher
 
 class TwitterFetcherTest(unittest.TestCase):

@@ -26,6 +26,7 @@ from google.appengine.api import users
 from google.appengine.ext import testbed
 
 import main
+import tests
 
 class MainTest(unittest.TestCase):
   def setUp(self):

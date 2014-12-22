@@ -27,6 +27,7 @@ from google.appengine.api import users
 from google.appengine.ext import testbed
 
 import api_admin
+import tests
 
 class ApiAdminTest(unittest.TestCase):
   def setUp(self):

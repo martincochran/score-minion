@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 
+import tests
 import unittest
 
 from google.appengine.api import urlfetch
@@ -24,7 +25,6 @@ from google.appengine.ext import testbed
 from google.appengine.runtime import apiproxy_errors
 
 import oauth_token_manager
-import tests
 import twitter_fetcher
 
 class TwitterFetcherTest(unittest.TestCase):

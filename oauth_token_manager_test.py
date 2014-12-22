@@ -15,12 +15,12 @@
 # limitations under the License.
 #
 
+import tests
 import unittest
 
 from google.appengine.ext import testbed
 
 import oauth_token_manager
-import tests
 
 class OauthTokenManagerTest(unittest.TestCase):
   def setUp(self):

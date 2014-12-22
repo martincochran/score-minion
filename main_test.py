@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 
+import tests
 import unittest
 
 import webapp2
@@ -26,7 +27,6 @@ from google.appengine.api import users
 from google.appengine.ext import testbed
 
 import main
-import tests
 
 class MainTest(unittest.TestCase):
   def setUp(self):

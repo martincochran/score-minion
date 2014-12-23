@@ -15,7 +15,6 @@
 # limitations under the License.
 #
 
-import tests
 import unittest
 
 from google.appengine.api import urlfetch

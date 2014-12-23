@@ -15,7 +15,6 @@
 # limitations under the License.
 #
 
-import tests
 import unittest
 
 import webapp2

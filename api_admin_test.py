@@ -16,7 +16,6 @@
 #
 
 import os
-import tests
 import unittest
 
 import webapp2

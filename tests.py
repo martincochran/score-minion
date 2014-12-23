@@ -16,8 +16,11 @@
 #
 
 import sys
+import os
 
-sys.path.insert(0, "/google-cloud-sdk/platform/google_appengine")
+lib_dir = os.environ.get('PYTHON_LIB', '')
+
+sys.path.insert(0, lib_dir)
 
 import dev_appserver
 dev_appserver.fix_sys_path()

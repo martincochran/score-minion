@@ -15,6 +15,9 @@
 # limitations under the License.
 #
 
+import mock
+from mock import patch
+
 import unittest
 
 import webapp2
@@ -64,15 +67,12 @@ class MainTest(unittest.TestCase):
 
     self.assertEqual(302, response.status_int)
 
-  def testGetLoggedIn(self):
-    def FakeGetCurrentUser():
-      return users.User(email='bob@test.com', _auth_domain='gmail.com')
-
-    self.saved_get_current_user = users.get_current_user
-    users.get_current_user = FakeGetCurrentUser
+  @patch.object(users, 'get_current_user')
+  def testGetLoggedIn(self, mock_get_current_user):
+    mock_get_current_user.return_value = users.User(
+        email='bob@test.com', _auth_domain='gmail.com')
 
     response = self.testapp.get('/')
-    users.get_current_user = self.saved_get_current_user
     self.assertEqual(200, response.status_int)
     self.assertTrue(response.body.find('test response') != -1)
 

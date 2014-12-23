@@ -15,6 +15,9 @@
 # limitations under the License.
 #
 
+import mock
+from mock import patch
+
 import os
 import unittest
 
@@ -60,36 +63,30 @@ class ApiAdminTest(unittest.TestCase):
     self.url_fetch_stub._RetrieveURL = self.saved_retrieve_url
     self.testbed.deactivate()
 
-  def testSanityGet(self):
-    def FakeGetCurrentUser():
-      return users.User(email='bob@test.com', _auth_domain='gmail.com')
-
-    self.saved_get_current_user = users.get_current_user
-    users.get_current_user = FakeGetCurrentUser
+  @patch.object(users, 'get_current_user')
+  def testSanityGet(self, mock_get_current_user):
+    mock_get_current_user.return_value = users.User(
+        email='bob@test.com', _auth_domain='gmail.com')
 
     # Set the admin status of the user
     os.environ['USER_IS_ADMIN'] = '1'
 
     response = self.testapp.get('/api_admin')
-    users.get_current_user = self.saved_get_current_user
     self.assertEqual(200, response.status_int)
 
-  def testPutKey(self):
+  @patch.object(users, 'get_current_user')
+  def testPutKey(self, mock_get_current_user):
     app2 = webapp2.WSGIApplication([('/api_admin/put_key', api_admin.PutKeyHandler)])
     self.testapp2 = webtest.TestApp(app2)
 
-    def FakeGetCurrentUser():
-      return users.User(email='bob@test.com', _auth_domain='gmail.com')
-
-    self.saved_get_current_user = users.get_current_user
-    users.get_current_user = FakeGetCurrentUser
+    mock_get_current_user.return_value = users.User(
+        email='bob@test.com', _auth_domain='gmail.com')
 
     # Set the admin status of the user
     os.environ['USER_IS_ADMIN'] = '1'
 
     params = {'content': 'new key'}
     response = self.testapp2.post('/api_admin/put_key', params)
-    users.get_current_user = self.saved_get_current_user
 
     # This re-directs back to the main handler.
     self.assertEqual(302, response.status_int)

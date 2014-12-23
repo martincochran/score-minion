@@ -18,7 +18,6 @@
 import tests
 import unittest
 
-from google.appengine.api import urlfetch
 from google.appengine.ext import testbed
 
 import oauth_token_manager

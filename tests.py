@@ -17,7 +17,7 @@
 
 import sys
 
-sys.path.append("/google-cloud-sdk/platform/google_appengine")
+sys.path.insert(0, "/google-cloud-sdk/platform/google_appengine")
 
 import dev_appserver
 dev_appserver.fix_sys_path()

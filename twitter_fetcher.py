@@ -21,12 +21,38 @@ import logging
 from google.appengine.api import urlfetch
 
 class TwitterFetcher:
-  """Interface with the Twitter API."""
+  """Interface with the Twitter API using the 'Application Only' API.
+
+  This allows the following functionality:
+  - Pull user timelines
+  - Access friends and followers of any account
+  - Access lists resources
+  - Search tweets
+  - Retrieve any user information:
+    - Lookup users
+    - Show users (info similar to that which you get from viewing a user in Twitter app)
+    - User search
+    - Get contributors / contributees
+  
+  More info: https://dev.twitter.com/oauth/application-only
+  """
 
   TOKEN_URL = 'https://api.twitter.com/oauth2/token'
 
   API_BASE_URL = 'https://api.twitter.com/1.1'
+
+  # TODO: change the parameter to user ids, which is stable
   STATUS_URL_TMPL = '/statuses/user_timeline.json?count=%s&screen_name=%s'
+  FRIENDS_URL_TMPL = '/friends/ids.json?count=%s&screen_name=%s'
+  FOLLOWERS_URL_TMPL = '/friends/ids.json?count=%s&screen_name=%s'
+  SEARCH_URL = '/search/tweets.json'
+  LOOKUP_USERS_URL = '/users/lookup.json'
+  LIST_LISTS_URL = '/lists/list.json'
+  LIST_STATUSES_URL = '/lists/statuses.json'
+  LIST_MEMBERSHIPS_URL ='/lists/memberships.json'
+  LIST_MEMBERS_URL ='/lists/members.json'
+  LIST_SUBSCRIBERS_URL ='/lists/subscribers.json'
+  LIST_SUBSCRIPTIONS_URL ='/lists/subscriptions.json'
 
   def __init__(self, token_manager):
     self.token_manager = token_manager
@@ -34,11 +60,95 @@ class TwitterFetcher:
     self.bearer_token = token_manager.GetToken()
 
   def LoadTimeline(self, screen_name, count=1):
-    """Fetches the last count posts from the timeline of screen_name."""
+    """Fetches the last count posts from the timeline of screen_name.
+
+    Rate limit: 300 / 15 minute window
+    More info: https://dev.twitter.com/rest/reference/get/statuses/user_timeline
+    """
     url = '%s%s' % (self.API_BASE_URL, self.STATUS_URL_TMPL % (count, screen_name))
     logging.info('Loading last %s posts from timeline for %s', count, screen_name)
     response = self._FetchResults(url)
     return response
+
+  def Search(self):
+    """Performs a search.
+
+    Rate limit: 450 / 15 minute window.
+    More info: https://dev.twitter.com/rest/reference/get/search/tweets
+    """
+    pass
+
+  def Friends(self):
+    """Fetches the friends for a given user.
+
+    Rate limit: 15 / 15 minute window.
+    More info: https://dev.twitter.com/rest/reference/get/friends/ids
+    """
+    pass
+
+  def Followers(self):
+    """Fetches the followers for a given user.
+
+    Rate limit: 15 / 15 minute window.
+    More info: https://dev.twitter.com/rest/reference/get/followers/ids
+    """
+    pass
+
+  def LookupUsers(self):
+    """Lookup the info for a set of users.
+
+    Rate limit: 60 / 15 minute window.
+    More info: https://dev.twitter.com/rest/reference/get/users/lookup
+    """
+    pass
+
+  def LookupLists(self):
+    """List the lists for a given user.
+
+    Rate limit: 15 / 15 minute window.
+    More info: https://dev.twitter.com/rest/reference/get/lists/list
+    """
+    pass
+
+  def ListStatuses(self):
+    """Returns a timeline of tweets authored by members of the given list.
+
+    Rate limit: 180 / 15 minute window.
+    More info: https://dev.twitter.com/rest/reference/get/lists/statuses
+    """
+    pass
+
+  def ListMemberships(self):
+    """Returns the lists the specified user has been added to.
+
+    Rate limit: 15 / 15 minute window.
+    More info: https://dev.twitter.com/rest/reference/get/lists/memberships
+    """
+    pass
+
+  def ListMembers(self):
+    """Returns the members of the specified list.
+
+    Rate limit: 15 / 15 minute window.
+    More info: https://dev.twitter.com/rest/reference/get/lists/members
+    """
+    pass
+
+  def ListSubscribers(self):
+    """Returns the subscribers of the specified list.
+
+    Rate limit: 15 / 15 minute window.
+    More info: https://dev.twitter.com/rest/reference/get/lists/subscribers
+    """
+    pass
+
+  def ListSubscriptions(self):
+    """Returns lists a user is subscribed to.
+
+    Rate limit: 15 / 15 minute window.
+    More info: https://dev.twitter.com/rest/reference/get/lists/subscriptions
+    """
+    pass
 
   def _FetchResults(self, url):
     """Try to fetch the results from the API.
@@ -78,7 +188,7 @@ class TwitterFetcher:
     if not errors:
       return False
 
-    # check on the type of errors[0]?
+    # TODO: check on the type of errors[0]?
     error_code = errors[0].get('code', -1)
     return int(error_code) in [89, 215]
 

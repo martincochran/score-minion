@@ -21,6 +21,11 @@ from mock import patch
 import os
 import unittest
 
+import test_env_setup
+
+# Must be done before importing any AE libraries
+test_env_setup.SetUpAppEngineSysPath()
+
 import webapp2
 import webtest
 

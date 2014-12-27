@@ -17,6 +17,11 @@
 
 import unittest
 
+import test_env_setup
+
+# Must be done before importing any AE libraries
+test_env_setup.SetUpAppEngineSysPath()
+
 from google.appengine.api import urlfetch
 from google.appengine.api import urlfetch_service_pb
 from google.appengine.api import urlfetch_stub

@@ -35,6 +35,7 @@ class TwitterFetcher:
     - Get contributors / contributees
   
   More info: https://dev.twitter.com/oauth/application-only
+  Rate limits: https://dev.twitter.com/rest/public/rate-limits
   """
 
   TOKEN_URL = 'https://api.twitter.com/oauth2/token'

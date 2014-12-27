@@ -31,7 +31,8 @@ class MainHandler(webapp2.RequestHandler):
       self.response.write('Hello, %s\n' % user.nickname())
       token_manager = oauth_token_manager.OauthTokenManager()
       fetcher = twitter_fetcher.TwitterFetcher(token_manager)
-      self.response.write('Last tweet by martin_cochran: %s' % fetcher.LoadTimeline('martin_cochran').content)
+      self.response.write('Last tweet by martin_cochran: %s' % fetcher.LoadTimeline(
+        'martin_cochran', count=20).content)
       self.response.write('\n<a href="%s">sign out</a>' % users.create_logout_url('/'))
     else:
       self.redirect(users.create_login_url(self.request.uri))

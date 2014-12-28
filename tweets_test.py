@@ -94,6 +94,17 @@ TWEET_JSON_LINES = [
       '"symbols":[],',
         '"user_mentions":[{"screen_name":"TheAtlantic","name":"The Atlantic",',
             '"id":35773039,"id_str":"35773039","indices":[7,19]}],',
+        '"media": [{"indices": [39, 61], "type": "photo", "id": 548218214254002177,',
+            '"media_url": "http://pbs.twimg.com/media/B5upj7ACQAEb_3u.jpg",',
+            '"id_str": "548218214254002177",',
+            '"url": "http://t.co/IUWsg3Lp2v",',
+            '"media_url_https": "https://pbs.twimg.com/media/B5upj7ACQAEb_3u.jpg",',
+            '"sizes": {"small": {"h": 340, "resize": "fit", "w": 340},',
+            '"large": {"h": 792, "resize": "fit", "w": 792},',
+            '"medium": {"h": 600, "resize": "fit", "w": 600},',
+            '"thumb": {"h": 150, "resize": "crop", "w": 150}},',
+            '"expanded_url": "http://twitter.com/furyultimate/status/548218220201517057/photo/1",',
+            '"display_url": "pic.twitter.com/IUWsg3Lp2v"}],',
         '"urls":[{"url":"http:\/\/t.co\/ub2EMDIssE",',
            '"expanded_url":"http:\/\/m.theatlantic.com\/politics\/archive\/2014\/12\/quiz-how-much-do-you-know-about-the-federal-budget\/383013\/",',
            '"display_url":"m.theatlantic.com\/politics\/archi...","indices":[113,135]}]},',
@@ -116,8 +127,7 @@ class TweetTest(unittest.TestCase):
     json_str = ''.join(TWEET_JSON_LINES)
     twt = tweets.Tweet.fromJson(json.loads(json_str))
 
-    self.assertEqual(ndb.Key(tweets.DEFAULT_TWEET_DB_NAME, '542785926674399232'),
-        twt.id_str)
+    self.assertEqual('542785926674399232', twt.id_str)
     self.assertTrue(twt.text.find('Your Federal Tax Dollars') != -1)
     self.assertEqual(twt.in_reply_to_status_id, None)
     self.assertEqual(twt.in_reply_to_user_id, None)
@@ -125,6 +135,7 @@ class TweetTest(unittest.TestCase):
     self.assertEqual(datetime.datetime(2014, 12, 10, 21, 0, 24), twt.created_at)
 
     self.assertEqual('568757027', twt.author_id)
+    self.assertEqual('martin_cochran', twt.author_screen_name)
     self.assertTrue(ndb.GeoPt(38.733081, -109.592514), twt.geo)
     self.assertEqual('5a110d312052166f', twt.place_id)
     self.assertEqual(0, twt.retweet_count)
@@ -151,6 +162,14 @@ class TweetTest(unittest.TestCase):
     self.assertEqual(7, user_mentions[0].start_idx)
     self.assertEqual(19, user_mentions[0].end_idx)
 
+    media = twt.entities.media
+    self.assertEqual(1, len(media))
+    self.assertEqual('548218214254002177', media[0].id_str)
+    self.assertEqual('https://pbs.twimg.com/media/B5upj7ACQAEb_3u.jpg',
+        media[0].url_https)
+    self.assertEqual(39, media[0].start_idx)
+    self.assertEqual(61, media[0].end_idx)
+
     integers = twt.entities.integers
     self.assertEqual(2, len(integers))
     self.assertEqual(8, integers[0].num)
@@ -171,8 +190,7 @@ class TweetTest(unittest.TestCase):
     json_str = ''.join(TWEET_JSON_LINES)
     user = tweets.User.fromJson(json.loads(json_str).get('user'))
 
-    self.assertEqual(ndb.Key(tweets.DEFAULT_AUTHOR_DB_NAME, '568757027'),
-        user.id_str)
+    self.assertEqual('568757027', user.id_str)
     self.assertEqual('Martin Cochran', user.name)
     self.assertEqual('martin_cochran', user.screen_name)
 
@@ -259,3 +277,49 @@ class TweetTest(unittest.TestCase):
 
     place = {'id': 'a'}
     self.assertEqual('a', tweets.ParsePlaceId(place))
+
+  def testParseIntegersInTweet(self):
+    entities = tweets.Entities()
+    text = '1.7k'
+
+    ies = tweets.ParseIntegersFromTweet(entities, text)
+    self.assertFalse(ies)
+
+    text = '7,000'
+    entities = tweets.Entities()
+    ies = tweets.ParseIntegersFromTweet(entities, text)
+    self.assertFalse(ies)
+
+    text = '$500'
+    entities = tweets.Entities()
+    ies = tweets.ParseIntegersFromTweet(entities, text)
+    self.assertFalse(ies)
+
+    text = '3:45'
+    entities = tweets.Entities()
+    ies = tweets.ParseIntegersFromTweet(entities, text)
+    self.assertFalse(ies)
+
+    text = '8-5'
+    entities = tweets.Entities()
+    ies = tweets.ParseIntegersFromTweet(entities, text)
+    self.assertEquals(2, len(ies))
+
+    text = '5.'
+    entities = tweets.Entities()
+    ies = tweets.ParseIntegersFromTweet(entities, text)
+    self.assertEquals(1, len(ies))
+
+    text = '8,'
+    entities = tweets.Entities()
+    ies = tweets.ParseIntegersFromTweet(entities, text)
+    self.assertEquals(1, len(ies))
+
+    text = '18,'
+    entities = tweets.Entities()
+    ies = tweets.ParseIntegersFromTweet(entities, text)
+    self.assertEquals(1, len(ies))
+
+
+if __name__ == '__main__':
+  unittest.main()

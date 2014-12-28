@@ -16,6 +16,7 @@
 #
 
 import cgi
+import datetime
 import json
 import logging
 import os
@@ -39,16 +40,38 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 
 class ShowTweetsHandler(webapp2.RequestHandler):
   def get(self):
-    # TODO: figure out if there is a better way to do a structured property filter
-    # TODO: perhaps store the name and screen_name in the tweet db for convenience
-    tweet_query = tweets.Tweet.query().order(-tweets.Tweet.created_at)
-    twts = tweet_query.fetch(200)
+    if self.request.get('show_all'):
+      tweet_query = tweets.Tweet.query().order(-tweets.Tweet.created_at)
+    else:
+      tweet_query = tweets.Tweet.query(
+          tweets.Tweet.two_or_more_integers == True).order(-tweets.Tweet.created_at)
+    account = self.request.get('user')
+    if account:
+      if self.request.get('show_all'):
+        tweet_query = tweets.Tweet.query(
+            tweets.Tweet.author_screen_name == account).order(-tweets.Tweet.created_at)
+      else:
+        tweet_query = tweets.Tweet.query(ndb.AND(tweets.Tweet.two_or_more_integers == True,
+            tweets.Tweet.author_screen_name == account)).order(-tweets.Tweet.created_at)
 
-    # TODO: this line is not being tested when twts is empty
-    twts = [twt for twt in twts if (twt.entities and len(twt.entities.integers) > 1)]
+    num_tweets = 10
+    try:
+      num_tweets = int(self.request.get('num_tweets'))
+    except ValueError:
+      logging.warning('Could not parse num_tweets from %s', self.request.get('num_tweets'))
+
+    num_tweets = min(num_tweets, 1000)
+    num_tweets = max(num_tweets, 1)
+
+    dbg = self.request.get('debug')
+    logging.info('Fetching %s tweets', num_tweets)
+    twts = tweet_query.fetch(num_tweets)
+
+    dbg = self.request.get('debug')
 
     template_values = {
       'tweets': twts,
+      'debug': self.request.get('debug'),
     }
 
     template = JINJA_ENVIRONMENT.get_template('html/show_tweets.html')
@@ -56,5 +79,4 @@ class ShowTweetsHandler(webapp2.RequestHandler):
 
 app = webapp2.WSGIApplication([
   ('/show_tweets', ShowTweetsHandler),
-  ('/show_tweets/', ShowTweetsHandler),
 ], debug=True)

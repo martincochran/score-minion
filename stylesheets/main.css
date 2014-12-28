@@ -2,3 +2,8 @@ body {
   font-family: Verdana, Helvetica, sans-serif;
   background-color: #DDDDDD;
 }
+
+table {
+  border-collapse: separate;
+  border-spacing: 10px 50px;
+}

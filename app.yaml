@@ -1,5 +1,5 @@
 application: omega-bearing-780
-version: alpha-000-002
+version: alpha-000-003
 runtime: python27
 api_version: 1
 threadsafe: no

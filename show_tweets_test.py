@@ -15,9 +15,7 @@
 # limitations under the License.
 #
 
-import mock
-from mock import patch
-
+import json
 import os
 import unittest
 
@@ -43,19 +41,65 @@ class AccountsTest(unittest.TestCase):
     self.testbed.init_datastore_v3_stub()
     self.testbed.init_user_stub()
 
-    app = webapp2.WSGIApplication([('/show_tweets', show_tweets.ShowTweetsHandler)])
-    self.testapp = webtest.TestApp(app)
+    self.testapp = webtest.TestApp(show_tweets.app)
+
+    twt = tweets.Tweet.fromJson(json.loads(
+        '{"user": {"id_str": "2", "screen_name": "bob"}, "id_str": "1"}'))
+    twt.put()
+
+    # Create a tweet with integers
+    twt = tweets.Tweet.fromJson(json.loads(
+        '{"user": {"id_str": "3", "screen_name": "alice"}, "id_str": "4"}'))
+    twt.entities.integers = [tweets.IntegerEntity(), tweets.IntegerEntity()]
+    twt.put()
 
   def tearDown(self):
     # Reset the URL stub to the original function
     self.testbed.deactivate()
 
-  @patch.object(users, 'get_current_user')
-  def testSanityGet(self, mock_get_current_user):
-    mock_get_current_user.return_value = users.User(
-        email='bob@test.com', _auth_domain='gmail.com')
-
+  def testSanityGet(self):
     response = self.testapp.get('/show_tweets')
     self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('alice') != -1)
+    self.assertTrue(response.body.find('bob') == -1)
+
+  def testShowAllGet(self):
+    response = self.testapp.get('/show_tweets?show_all=y')
+    self.assertEqual(200, response.status_int)
+    print response.body
+    self.assertTrue(response.body.find('bob') != -1)
+    self.assertTrue(response.body.find('alice') != -1)
+
+  def testDebugGet(self):
+    response = self.testapp.get('/show_tweets?debug=y')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('alice') != -1)
+    self.assertTrue(response.body.find('bob') == -1)
+
+  def testNumTweetsGet(self):
+    response = self.testapp.get('/show_tweets?num_tweets=20')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('alice') != -1)
+    self.assertTrue(response.body.find('bob') == -1)
+
+  def testNumTweetsGet_badValue(self):
+    response = self.testapp.get('/show_tweets?num_tweets=y')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('alice') != -1)
+    self.assertTrue(response.body.find('bob') == -1)
+
+  def testSpecifyUser_noResults(self):
+    response = self.testapp.get('/show_tweets?user=bob')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('alice') == -1)
+    self.assertTrue(response.body.find('bob') == -1)
+
+  def testSpecifyUser_someResults(self):
+    response = self.testapp.get('/show_tweets?user=bob&show_all=y')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('alice') == -1)
+    self.assertTrue(response.body.find('bob') != -1)
 
 
+if __name__ == '__main__':
+  unittest.main()

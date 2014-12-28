@@ -78,18 +78,46 @@ def ParseIntegersFromTweet(entities, tweet_text):
   ies = []
   if not tweet_text:
     return []
-  for item in re.finditer(r'\d+', tweet_text):
-    # Don't worry about really big numbers - they're not scores
-    if len(item.group(0)) > 10:
+  for item in re.finditer(r'\$?[\d:.,]+', tweet_text):
+    # Don't worry about big numbers - they're not scores
+    if len(item.group(0)) > 3:
+      continue
+
+    # If we didn't match any numbers, move on
+    if not re.findall(r'\d+', item.group(0)):
+      continue
+
+    # Don't worry about money amounts
+    if '$' in item.group(0)[0]:
+      continue
+
+    # Numbers with commas are not scores, but don't worry about trailing commas
+    if '.' in item.group(0)[:-1]:
+      continue
+
+    # Neither are decimal numbers
+    if ',' in item.group(0)[:-1]:
+      continue
+
+    # Neither are decimal numbers
+    if ':' in item.group(0):
       continue
 
     # Don't worry about numbers in other entities
     if entities.IsIndexInEntities(item.start(0), item.end(0)):
       continue
     ie = IntegerEntity()
-    ie.num = long(item.group(0))
+    number_text = item.group(0)
+    end_offset = 0
+    if number_text[-1] in ['.', ',']:
+      number_text = number_text[:-1]
+      end_offset = -1
+
+    print number_text
+    ie.num = long(number_text)
     ie.start_idx = int(item.start(0))
-    ie.end_idx = int(item.end(0))
+    ie.end_idx = int(item.end(0) + end_offset)
+
     ies.append(ie)
 
   return ies
@@ -165,6 +193,7 @@ class UrlMentionEntity(ndb.Model):
     ume.end_idx = indices[1]
     return ume
 
+
 class HashTagEntity(ndb.Model):
   """Information about a hashtag in the tweet."""
   text = ndb.StringProperty()
@@ -180,10 +209,34 @@ class HashTagEntity(ndb.Model):
     hte.text = json_obj.get('text', '')
     indices = json_obj.get('indices', [])
     if len(indices) < 2:
-      return ume
+      return hte
     hte.start_idx = indices[0]
     hte.end_idx = indices[1]
     return hte
+
+
+class MediaEntity(ndb.Model):
+  """Information about media (eg, a link to a photo) in the tweet."""
+  # We don't save most of the info, we're mostly just interested in the indices
+  url_https = ndb.StringProperty(indexed=False)
+  id_str = ndb.StringProperty(indexed=False)
+
+  # The character positions in the tweet where this entity started and ended.
+  start_idx = ndb.IntegerProperty('si')
+  end_idx = ndb.IntegerProperty('ei')
+
+  @classmethod
+  def fromJson(cls, json_obj):
+    """Builds a MediaEntity object from a json object."""
+    ment = MediaEntity()
+    ment.url_https = json_obj.get('media_url_https', '')
+    ment.id_str = json_obj.get('id_str', '')
+    indices = json_obj.get('indices', [])
+    if len(indices) < 2:
+      return ment
+    ment.start_idx = indices[0]
+    ment.end_idx = indices[1]
+    return ment
 
 
 class IntegerEntity(ndb.Model):
@@ -208,6 +261,7 @@ class Entities(ndb.Model):
   hashtags = ndb.StructuredProperty(HashTagEntity, 'h', repeated=True)
   user_mentions = ndb.StructuredProperty(UserMentionEntity, 'usm', repeated=True)
   url_mentions = ndb.StructuredProperty(UrlMentionEntity, 'urm', repeated=True)
+  media = ndb.StructuredProperty(MediaEntity, 'me', repeated=True)
   integers = ndb.StructuredProperty(IntegerEntity, 'n', repeated=True)
 
   def IsIndexInEntities(self, start_idx, end_idx):
@@ -220,6 +274,9 @@ class Entities(ndb.Model):
         return True
     for um in self.url_mentions:
       if start_idx >= um.start_idx and start_idx < um.end_idx:
+        return True
+    for ment in self.media:
+      if start_idx >= ment.start_idx and start_idx < ment.end_idx:
         return True
     # Don't worry about integers because this is called by the integer-parsing code.
     return False
@@ -249,8 +306,21 @@ class Entities(ndb.Model):
       parsed_um = UrlMentionEntity.fromJson(url_mention)
       if parsed_um:
         entities.url_mentions.append(parsed_um)
+    for media_entity in json_obj.get('media', []):
+      parsed_ment = MediaEntity.fromJson(media_entity)
+      if parsed_ment:
+        entities.media.append(parsed_ment)
     entities.integers = ParseIntegersFromTweet(entities, tweet_text)
     return entities
+
+
+def MoreThanTwoEntities(tweet_obj):
+  print tweet_obj.entities
+  return len(tweet_obj.entities.integers) > 1
+ #   print 'Returning yes'
+ #   return 'Yes'
+ # print 'Returning no'
+ # return 'No'
 
 
 class Tweet(ndb.Model):
@@ -261,13 +331,16 @@ class Tweet(ndb.Model):
   # Author of the tweet
   author_id = ndb.StringProperty('a', required=True)
 
+  # Screen name of the author
+  author_screen_name = ndb.StringProperty('an', required=True)
+
   # Date & time the tweet was authored
   created_at = ndb.DateTimeProperty('cd', required=True)
 
   # 64-bit, unique, stable id, but Keys should use strings, not ints, to avoid
   # key collisions with keys picked by the datastore
   # See: https://cloud.google.com/appengine/docs/python/ndb/entities#numeric_keys
-  id_str = ndb.KeyProperty('id', required=True)
+  id_str = ndb.StringProperty('id', required=True)
 
   # Text of tweet
   text = ndb.StringProperty('t')
@@ -323,6 +396,8 @@ class Tweet(ndb.Model):
   ##### Score minion-specific metadata about this object #####
   date_added = ndb.DateTimeProperty('da', auto_now_add=True)
   date_modified = ndb.DateTimeProperty('dm', auto_now=True)
+  num_entities = ndb.ComputedProperty(lambda self: len(self.entities.integers), 'ne')
+  two_or_more_integers = ndb.ComputedProperty(MoreThanTwoEntities, 'tom')
 
   # Keep track of which version added this data
   # TODO: consider making this part of the key, and enforcing (somehow) that
@@ -334,9 +409,11 @@ class Tweet(ndb.Model):
     """Builds a Tweet object from a json object."""
     id_str = json_obj.get('id_str', '')
     if not id_str:
+      logging.warning('Could not parse tweet: %s', json_obj)
       return None
     return Tweet(author_id=json_obj.get('user', {}).get('id_str', ''),
-        id_str=ndb.Key(DEFAULT_TWEET_DB_NAME, id_str),
+        author_screen_name=json_obj.get('user', {}).get('screen_name', ''),
+        id_str=id_str,
         created_at=ParseTweetDateString(
           json_obj.get('created_at', ''), tweet_id=id_str),
         added_by_app_version=APP_VERSION,
@@ -362,7 +439,7 @@ class User(ndb.Model):
   # Unique, stable, 64-bit id for the user.  Strings are used to avoid collisions
   # in the keyspace with auto-picked keys
   # See also: https://cloud.google.com/appengine/docs/python/ndb/entities#numeric_keys
-  id_str = ndb.KeyProperty('id', required=True)
+  id_str = ndb.StringProperty('id', required=True)
 
   # User-defined name
   name = ndb.StringProperty('n')  # eg, "Martin Cochran"
@@ -444,7 +521,7 @@ class User(ndb.Model):
     id_str = json_obj.get('id_str', '')
     if not id_str:
       return None
-    return User(id_str=ndb.Key(DEFAULT_AUTHOR_DB_NAME, id_str),
+    return User(id_str=id_str,
         name=json_obj.get('name', ''),
         screen_name=json_obj.get('screen_name', ''),
         location=json_obj.get('location', ''),

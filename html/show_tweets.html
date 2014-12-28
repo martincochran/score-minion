@@ -10,12 +10,24 @@
         <td><b>Tweet text</b></td>
         <td><b>Date</b></td>
         <td><b>Author</b></td>
+        {% if debug %}
+        <td><b>Num Entities</b></td>
+        <td><b>2 or more</b></td>
+        <td><b>Integer Entities</b></td>
+        <td><b>Json</b></td>
+        {% endif %}
       </tr>
       {% for tweet in tweets %}
       <tr>
       <td>{{ tweet.text }}</td>
       <td>{{ tweet.created_at }}</td>
-      <td>{{ tweet.author_id }}</td>
+      <td>{{ tweet.author_screen_name }}</td>
+      {% if debug %}
+      <td>{{ tweet.num_entities }}</td>
+      <td>{{ tweet.two_or_more_integers }}</td>
+      <td>{{ tweet.entities.integers }}</td>
+      <td>{{ tweet.original_json }}</td>
+      {% endif %}
       </tr>
     {% endfor %}
     </table>

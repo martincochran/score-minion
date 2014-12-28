@@ -15,10 +15,6 @@
 # limitations under the License.
 #
 
-import mock
-from mock import patch
-
-import os
 import unittest
 
 import test_env_setup
@@ -31,15 +27,14 @@ import webtest
 
 from google.appengine.api import urlfetch
 from google.appengine.api import urlfetch_stub
-from google.appengine.api import users
 from google.appengine.ext import testbed
+from google.appengine.ext.ndb import stats
 
 import accounts
 import tweets
 
 class AccountsTest(unittest.TestCase):
   def setUp(self):
-
     self.testbed = testbed.Testbed()
     self.testbed.activate()
     self.testbed.init_urlfetch_stub()
@@ -61,33 +56,18 @@ class AccountsTest(unittest.TestCase):
     self.saved_retrieve_url = self.url_fetch_stub._RetrieveURL
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
-    app = webapp2.WSGIApplication([('/accounts', accounts.AccountsHandler)])
-    self.testapp = webtest.TestApp(app)
+    self.testapp = webtest.TestApp(accounts.app)
 
   def tearDown(self):
     # Reset the URL stub to the original function
     self.url_fetch_stub._RetrieveURL = self.saved_retrieve_url
     self.testbed.deactivate()
 
-  @patch.object(users, 'get_current_user')
-  def testSanityGet(self, mock_get_current_user):
-    mock_get_current_user.return_value = users.User(
-        email='bob@test.com', _auth_domain='gmail.com')
+  def testSanityGet(self):
+    self.assertEqual(200, self.testapp.get('/accounts').status_int)
 
-    response = self.testapp.get('/accounts')
-    self.assertEqual(200, response.status_int)
-
-  @patch.object(users, 'get_current_user')
-  def testFollowAccount(self, mock_get_current_user):
-    app2 = webapp2.WSGIApplication([('/accounts/follow_account',
-          accounts.AddAccountHandler)])
-    self.testapp2 = webtest.TestApp(app2)
-
-    mock_get_current_user.return_value = users.User(
-        email='bob@test.com', _auth_domain='gmail.com')
-
-    params = {'account': 'bob'}
-    response = self.testapp2.post('/accounts/follow_account', params)
+  def testFollowAccount(self):
+    response = self.testapp.post('/accounts/follow_account', {'account': 'bob'})
 
     # This re-directs back to the main handler.
     self.assertEqual(302, response.status_int)
@@ -97,4 +77,130 @@ class AccountsTest(unittest.TestCase):
     # Verify the new key is in the body
     self.assertTrue(response.body.find('bob') != -1)
 
+  def testDeleteAccount(self):
+    params = {'account': 'bob'}
+    # First add an account
+    self.testapp.post('/accounts/follow_account', params)
 
+    # Now delete it
+    response = self.testapp.post('/accounts/delete_account', params)
+
+    # This re-directs back to the main handler.
+    self.assertEqual(302, response.status_int)
+    response = self.testapp.get('/accounts')
+    self.assertEqual(200, response.status_int)
+
+    # Verify the new key is in the body
+    self.assertTrue(response.body.find('bob') == -1)
+
+  def testDeleteAllAccounts(self):
+    self.return_statuscode = [200, 200]
+    self.return_content = [
+        '[{"user": {"id_str": "1234", "screen_name": "bob"}}]',
+        '[{"user": {"id_str": "9999", "screen_name": "steve"}}]',
+    ]
+
+    self.testapp.post('/accounts/follow_account', {'account': 'bob'})
+    self.testapp.post('/accounts/follow_account', {'account': 'steve'})
+    response = self.testapp.post('/accounts/delete_all_accounts', {})
+
+    # This re-directs back to the main handler.
+    self.assertEqual(302, response.status_int)
+    response = self.testapp.get('/accounts')
+    self.assertEqual(200, response.status_int)
+
+    # Verify the new key is in the body
+    self.assertTrue(response.body.find('bob') == -1)
+    self.assertTrue(response.body.find('steve') == -1)
+
+  def testDeleteAllAccounts(self):
+    self.return_statuscode = [200, 200]
+    self.return_content = [
+        '[{"user": {"id_str": "1234", "screen_name": "bob"}}]',
+        '[{"user": {"id_str": "9999", "screen_name": "steve"}}]',
+    ]
+
+    self.testapp.post('/accounts/follow_account', {'account': 'bob'})
+    self.testapp.post('/accounts/follow_account', {'account': 'steve'})
+    response = self.testapp.post('/accounts/delete_all_accounts', {})
+
+    # This re-directs back to the main handler.
+    self.assertEqual(302, response.status_int)
+    response = self.testapp.get('/accounts')
+    self.assertEqual(200, response.status_int)
+
+    # Verify the new key is in the body
+    self.assertTrue(response.body.find('bob') == -1)
+    self.assertTrue(response.body.find('steve') == -1)
+
+  def testDeleteAllTweets(self):
+    self.return_content = [
+        '[{"user": {"id_str": "1234", "screen_name": "bob"}, "id_str": "123"}]',
+    ]
+
+    # First add an account
+    self.testapp.post('/accounts/follow_account', {'account': 'bob'})
+
+    # Ensure there is at least one tweet in the db
+    tweet_query = tweets.Tweet.query()
+    tweet_db = tweet_query.fetch(1000)
+    self.assertEquals(1, len(tweet_db))
+
+    # Now delete it
+    response = self.testapp.post('/accounts/delete_all_tweets', {})
+
+    # This re-directs back to the main handler.
+    self.assertEqual(302, response.status_int)
+    tweet_query = tweets.Tweet.query()
+    tweet_db = tweet_query.fetch(1000)
+    self.assertFalse(tweet_db)
+
+    response = self.testapp.get('/accounts')
+    self.assertEqual(200, response.status_int)
+
+    # The account is still there, though
+    self.assertTrue(response.body.find('bob') != -1)
+
+  def testRecrawl(self):
+    self.return_statuscode = [200, 200, 200, 200]
+    self.return_content = [
+        '[{"user": {"id_str": "1234", "screen_name": "bob"}, "id_str": "123"}]',
+        '[{"user": {"id_str": "999", "screen_name": "steve"}, "id_str": "456"}]',
+        '[{"user": {"id_str": "1234", "screen_name": "bob"}, "id_str": "777"}]',
+        '[{"user": {"id_str": "999", "screen_name": "steve"}, "id_str": "888"}]',
+    ]
+
+    # First add an account
+    self.testapp.post('/accounts/follow_account', {'account': 'bob'})
+    self.testapp.post('/accounts/follow_account', {'account': 'steve'})
+
+    tweet_query = tweets.Tweet.query()
+    tweet_db = tweet_query.fetch(1000)
+    self.assertEquals(2, len(tweet_db))
+    for tweet in tweet_db:
+      self.assertIn(tweet.id_str, ['123', '456'])
+
+    # Now delete it
+    response = self.testapp.post('/accounts/recrawl', {})
+
+    # This re-directs back to the main handler.
+    self.assertEqual(302, response.status_int)
+
+    tweet_query = tweets.Tweet.query()
+    tweet_db = tweet_query.fetch(1000)
+    self.assertEquals(2, len(tweet_db))
+
+    # The tweets are different
+    for tweet in tweet_db:
+      self.assertIn(tweet.id_str, ['777', '888'])
+
+    response = self.testapp.get('/accounts')
+    self.assertEqual(200, response.status_int)
+
+    # The account is still there, though
+    self.assertTrue(response.body.find('bob') != -1)
+    self.assertTrue(response.body.find('steve') != -1)
+
+
+if __name__ == '__main__':
+  unittest.main()

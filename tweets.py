@@ -391,7 +391,7 @@ class Tweet(ndb.Model):
 
   # Eventually I might deprecate this, but it's staying until parsing bugs are
   # worked out.
-  original_json = ndb.TextProperty('json')
+  original_json = ndb.TextProperty('json', compressed=True)
 
   ##### Score minion-specific metadata about this object #####
   date_added = ndb.DateTimeProperty('da', auto_now_add=True)

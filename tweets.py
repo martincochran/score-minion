@@ -113,7 +113,6 @@ def ParseIntegersFromTweet(entities, tweet_text):
       number_text = number_text[:-1]
       end_offset = -1
 
-    print number_text
     ie.num = long(number_text)
     ie.start_idx = int(item.start(0))
     ie.end_idx = int(item.end(0) + end_offset)
@@ -314,15 +313,6 @@ class Entities(ndb.Model):
     return entities
 
 
-def MoreThanTwoEntities(tweet_obj):
-  print tweet_obj.entities
-  return len(tweet_obj.entities.integers) > 1
- #   print 'Returning yes'
- #   return 'Yes'
- # print 'Returning no'
- # return 'No'
-
-
 class Tweet(ndb.Model):
   """Models an individual Tweet diplayed in a timeline.
   
@@ -397,7 +387,8 @@ class Tweet(ndb.Model):
   date_added = ndb.DateTimeProperty('da', auto_now_add=True)
   date_modified = ndb.DateTimeProperty('dm', auto_now=True)
   num_entities = ndb.ComputedProperty(lambda self: len(self.entities.integers), 'ne')
-  two_or_more_integers = ndb.ComputedProperty(MoreThanTwoEntities, 'tom')
+  two_or_more_integers = ndb.ComputedProperty(
+      lambda self: len(self.entities.integers) > 1, 'tom')
 
   # Keep track of which version added this data
   # TODO: consider making this part of the key, and enforcing (somehow) that

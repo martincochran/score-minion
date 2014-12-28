@@ -34,9 +34,10 @@ from google.appengine.api import urlfetch_stub
 from google.appengine.api import users
 from google.appengine.ext import testbed
 
-import api_admin
+import accounts
+import tweets
 
-class ApiAdminTest(unittest.TestCase):
+class AccountsTest(unittest.TestCase):
   def setUp(self):
 
     self.testbed = testbed.Testbed()
@@ -48,7 +49,7 @@ class ApiAdminTest(unittest.TestCase):
     self.url_fetch_stub = self.testbed.get_stub(testbed.URLFETCH_SERVICE_NAME)
 
     self.return_statuscode = [200]
-    self.return_content = ['test response']
+    self.return_content = ['[{"user": {"id_str": "1234", "screen_name": "bob"}}]']
 
     # Stub out the call to fetch the URL
     def _FakeFetch(url, payload, method, headers, request, response,
@@ -60,7 +61,7 @@ class ApiAdminTest(unittest.TestCase):
     self.saved_retrieve_url = self.url_fetch_stub._RetrieveURL
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
-    app = webapp2.WSGIApplication([('/api_admin', api_admin.ApiAdminHandler)])
+    app = webapp2.WSGIApplication([('/accounts', accounts.AccountsHandler)])
     self.testapp = webtest.TestApp(app)
 
   def tearDown(self):
@@ -73,28 +74,27 @@ class ApiAdminTest(unittest.TestCase):
     mock_get_current_user.return_value = users.User(
         email='bob@test.com', _auth_domain='gmail.com')
 
-    response = self.testapp.get('/api_admin')
+    response = self.testapp.get('/accounts')
     self.assertEqual(200, response.status_int)
 
   @patch.object(users, 'get_current_user')
-  def testPutKey(self, mock_get_current_user):
-    app2 = webapp2.WSGIApplication([('/api_admin/put_key', api_admin.PutKeyHandler)])
+  def testFollowAccount(self, mock_get_current_user):
+    app2 = webapp2.WSGIApplication([('/accounts/follow_account',
+          accounts.AddAccountHandler)])
     self.testapp2 = webtest.TestApp(app2)
 
     mock_get_current_user.return_value = users.User(
         email='bob@test.com', _auth_domain='gmail.com')
 
-    params = {'content': 'new key'}
-    response = self.testapp2.post('/api_admin/put_key', params)
+    params = {'account': 'bob'}
+    response = self.testapp2.post('/accounts/follow_account', params)
 
     # This re-directs back to the main handler.
     self.assertEqual(302, response.status_int)
-    response = self.testapp.get('/api_admin')
+    response = self.testapp.get('/accounts')
     self.assertEqual(200, response.status_int)
 
     # Verify the new key is in the body
-    self.assertTrue(response.body.find('new key') != -1)
+    self.assertTrue(response.body.find('bob') != -1)
 
 
-if __name__ == '__main__':
-  unittest.main()

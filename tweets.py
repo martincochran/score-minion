@@ -17,6 +17,7 @@
 
 import datetime
 import logging
+import json
 import os
 import re
 
@@ -315,6 +316,10 @@ class Tweet(ndb.Model):
   # BCP 47 lang code: http://tools.ietf.org/html/bcp47
   lang = ndb.StringProperty('la')  # eg, "en"
 
+  # Eventually I might deprecate this, but it's staying until parsing bugs are
+  # worked out.
+  original_json = ndb.TextProperty('json')
+
   ##### Score minion-specific metadata about this object #####
   date_added = ndb.DateTimeProperty('da', auto_now_add=True)
   date_modified = ndb.DateTimeProperty('dm', auto_now=True)
@@ -328,6 +333,8 @@ class Tweet(ndb.Model):
   def fromJson(cls, json_obj):
     """Builds a Tweet object from a json object."""
     id_str = json_obj.get('id_str', '')
+    if not id_str:
+      return None
     return Tweet(author_id=json_obj.get('user', {}).get('id_str', ''),
         id_str=ndb.Key(DEFAULT_TWEET_DB_NAME, id_str),
         created_at=ParseTweetDateString(
@@ -343,6 +350,7 @@ class Tweet(ndb.Model):
         favorite_count = long(json_obj.get('favorite_count', 0)),
         entities=Entities.fromJson(json_obj.get('entities', {}),
           tweet_text=json_obj.get('text', '')),
+        original_json=json.dumps(json_obj),
         lang=json_obj.get('lang', ''))
 
 
@@ -434,6 +442,8 @@ class User(ndb.Model):
   def fromJson(cls, json_obj):
     """Builds a User object from a json object."""
     id_str = json_obj.get('id_str', '')
+    if not id_str:
+      return None
     return User(id_str=ndb.Key(DEFAULT_AUTHOR_DB_NAME, id_str),
         name=json_obj.get('name', ''),
         screen_name=json_obj.get('screen_name', ''),

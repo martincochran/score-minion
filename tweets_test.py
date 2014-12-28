@@ -198,6 +198,20 @@ class TweetTest(unittest.TestCase):
     # Verify the data can be written to the datastore
     user.put()
 
+  def testParseUser_missingIdStr(self):
+    """Test parsing an example user with no id_str field."""
+    json_str = '{"user": {}}'
+    user = tweets.User.fromJson(json.loads(json_str))
+
+    self.assertEqual(None, user)
+
+  def testParseTweet_missingIdStr(self):
+    """Test parsing an example user with no id_str field."""
+    json_str = '{}'
+    user = tweets.Tweet.fromJson(json.loads(json_str))
+
+    self.assertEqual(None, user)
+
   def testDateParsing(self):
     data_str = ''
     dt = tweets.ParseTweetDateString(data_str)

@@ -175,7 +175,7 @@ class TwitterFetcher:
 
   def _ShouldReAuthenticate(self, response):
     """Determines if a re-authentication is necessary given an API response."""
-    logging.info('Checking to see if we should re-authenticate: %s', response.status_code)
+    logging.debug('Checking to see if we should re-authenticate: %s', response.status_code)
     if response.status_code not in [400, 401]:
       return False
 

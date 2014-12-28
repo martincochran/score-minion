@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+{% autoescape true %}
+<html>
+  <head>
+  <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+  </head>
+  <body>
+    <table>
+      <tr>
+        <td><b>Tweet text</b></td>
+        <td><b>Date</b></td>
+        <td><b>Author</b></td>
+      </tr>
+      {% for tweet in tweets %}
+      <tr>
+      <td>{{ tweet.text }}</td>
+      <td>{{ tweet.created_at }}</td>
+      <td>{{ tweet.author_id }}</td>
+      </tr>
+    {% endfor %}
+    </table>
+
+  </body>
+</html>
+{% endautoescape %}

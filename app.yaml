@@ -1,21 +1,37 @@
 application: omega-bearing-780
-version: alpha-000-001
+version: alpha-000-002
 runtime: python27
 api_version: 1
 threadsafe: no
 
 handlers:
+# Static files
+- url: /stylesheets
+  static_dir: stylesheets
+
 - url: /favicon\.ico
   static_files: favicon.ico
   upload: favicon\.ico
 
+# Public handler
+- url: /show_tweets.*
+  script: show_tweets.app
+
+# Admin handlers
 - url: /api_admin.*
   script: api_admin.app
   login: admin
 
+- url: /accounts.*
+  script: accounts.app
+  login: admin
+
+# Main handler
 - url: .*
   script: main.app
 
 libraries:
 - name: webapp2
   version: "latest"
+- name: jinja2
+  version: 2.6

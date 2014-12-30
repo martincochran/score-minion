@@ -83,7 +83,7 @@ class CrawlListsTest(unittest.TestCase):
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
     self.assertFalse(list_query.fetch(10))
 
-    response = self.testapp.get('/tasks/update_lists')
+    response = self.testapp.get('/tasks/update_lists_rate_limited')
     self.assertEqual(200, response.status_int)
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
@@ -96,7 +96,7 @@ class CrawlListsTest(unittest.TestCase):
     # Return one list from the API, and store it.
     self.return_statuscode = [200]
     self.return_content = ['{"lists": [{"id_str": "1234"}]}']
-    self.testapp.get('/tasks/update_lists')
+    self.testapp.get('/tasks/update_lists_rate_limited')
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
     list_entries = list_query.fetch(10)
@@ -107,7 +107,7 @@ class CrawlListsTest(unittest.TestCase):
     self.return_statuscode = [200]
     self.return_content = ['{"lists": [{"id_str": "1234"}]}']
 
-    response = self.testapp.get('/tasks/update_lists')
+    response = self.testapp.get('/tasks/update_lists_rate_limited')
     self.assertEqual(200, response.status_int)
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
@@ -119,7 +119,7 @@ class CrawlListsTest(unittest.TestCase):
     # Return one list from the API, and store it.
     self.return_statuscode = [200]
     self.return_content = ['{"lists": [{"id_str": "1234"}]}']
-    self.testapp.get('/tasks/update_lists')
+    self.testapp.get('/tasks/update_lists_rate_limited')
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
     list_entries = list_query.fetch(10)
@@ -130,7 +130,7 @@ class CrawlListsTest(unittest.TestCase):
     self.return_statuscode = [200]
     self.return_content = ['{"lists": [{"id_str": "1234"}, {"id_str": "87"}]}']
 
-    response = self.testapp.get('/tasks/update_lists')
+    response = self.testapp.get('/tasks/update_lists_rate_limited')
     self.assertEqual(200, response.status_int)
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
@@ -142,7 +142,7 @@ class CrawlListsTest(unittest.TestCase):
     # Return one list from the API, and store it.
     self.return_statuscode = [200]
     self.return_content = ['{"lists": [{"id_str": "1234"}]}']
-    self.testapp.get('/tasks/update_lists')
+    self.testapp.get('/tasks/update_lists_rate_limited')
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
     list_entries = list_query.fetch(10)
@@ -153,7 +153,7 @@ class CrawlListsTest(unittest.TestCase):
     self.return_statuscode = [200]
     self.return_content = ['{"lists": []}']
 
-    response = self.testapp.get('/tasks/update_lists')
+    response = self.testapp.get('/tasks/update_lists_rate_limited')
     self.assertEqual(200, response.status_int)
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
@@ -179,6 +179,13 @@ class CrawlListsTest(unittest.TestCase):
       self.assertIn(tweet.id_str, ['1', '4'])
       self.assertEquals(tweet.from_list, '123')
 
+    # Also check the users
+    user_query = tweets.User.query()
+    user_db = user_query.fetch(10)
+    self.assertEquals(2, len(user_db))
+    for user in user_db:
+      self.assertIn(user.id_str, ['2', '3'])
+
     # Now update it again - there should be no new entries
     self.return_statuscode = [200]
     self.return_content = list(fake_content)
@@ -191,6 +198,13 @@ class CrawlListsTest(unittest.TestCase):
     for tweet in tweet_db:
       self.assertIn(tweet.id_str, ['1', '4'])
       self.assertEquals(tweet.from_list, '123')
+
+    # Also check the users
+    user_query = tweets.User.query()
+    user_db = user_query.fetch(10)
+    self.assertEquals(2, len(user_db))
+    for user in user_db:
+      self.assertIn(user.id_str, ['2', '3'])
 
   def testCrawlList_incrementalNewTweets(self):
     self.return_statuscode = [200]
@@ -267,7 +281,7 @@ class CrawlListsTest(unittest.TestCase):
   def testCrawlAllLists_someLists(self, mock_add_queue):
     self.return_statuscode = [200]
     self.return_content = ['{"lists": [{"id_str": "1234"}, {"id_str": "87"}]}']
-    self.testapp.get('/tasks/update_lists')
+    self.testapp.get('/tasks/update_lists_rate_limited')
 
     response = self.testapp.get('/tasks/crawl_all_lists')
     self.assertEqual(200, response.status_int)
@@ -281,6 +295,19 @@ class CrawlListsTest(unittest.TestCase):
     self.assertEquals(calls[1], mock.call(
         url='/tasks/crawl_list', method='GET',
         params={'list_id': '87'}, queue_name='list-statuses'))
+
+  @patch.object(taskqueue, 'add')
+  def testUpdateLists_cronEntryPoint(self, mock_add_queue):
+    response = self.testapp.get('/tasks/update_lists')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('Enqueued') != -1)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(1, len(calls))
+    self.assertEquals(calls[0], mock.call(
+        url='/tasks/update_lists_rate_limited', method='GET',
+        queue_name='list-lists'))
+
 
   def testUpdateLatestStatus(self):
     pass

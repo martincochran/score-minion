@@ -54,10 +54,22 @@ class ManagedLists(ndb.Model):
 
 class UpdateListsHandler(webapp2.RequestHandler):
   def get(self):
+    taskqueue.add(url='/tasks/update_lists_rate_limited', method='GET',
+        queue_name='list-lists')
+    msg = 'Enqueued rate-limited list update.'
+    logging.debug(msg)
+    self.response.write(msg)
+
+
+class UpdateListsRateLimitedHandler(webapp2.RequestHandler):
+  """Rate-limited update lists handler via a queue.
+
+  This should never be called directly.  UpdateListsHandler will call this
+  handler via a rate-limited queue, which will ensure the twitter API will
+  never block requests.
+  """
+  def get(self):
     """Retrieve the lists via the Twitter API and store them in the datastore."""
-    # TODO: consider adding this to a task queue so it can be rate-limited.  All
-    # this handler should do is read the list from storage and send off calls to
-    # crawl each list.
     token_manager = oauth_token_manager.OauthTokenManager()
     fetcher = twitter_fetcher.TwitterFetcher(token_manager)
     fetch_response = fetcher.LookupLists(ADMIN_USER)
@@ -92,6 +104,8 @@ class UpdateListsHandler(webapp2.RequestHandler):
     msg = 'Updated lists for user %s: %s' % (ADMIN_USER, lists)
     logging.debug(msg)
     self.response.write(msg)
+
+
 
 
 class CrawlAllListsHandler(webapp2.RequestHandler):
@@ -145,6 +159,9 @@ class CrawlListHandler(webapp2.RequestHandler):
     # TODO: refactor logic here w/ logic from accounts.py.  Do in same swoop
     # as adding error-handling and json parsing to twitter_fetcher. Catch all 
     # errors and re-throw as a single error that callers can handle.
+
+    # TODO: looks like there might be a bug here, as multiple entities are
+    # getting added for the same account
     parsed_tweets = []
     for json_twt in json_obj:
       twt = tweets.Tweet.fromJson(json_twt)
@@ -285,6 +302,7 @@ class CrawlListHandler(webapp2.RequestHandler):
 
 app = webapp2.WSGIApplication([
   ('/tasks/update_lists', UpdateListsHandler),
+  ('/tasks/update_lists_rate_limited', UpdateListsRateLimitedHandler),
   ('/tasks/crawl_list', CrawlListHandler),
   ('/tasks/crawl_all_lists', CrawlAllListsHandler),
 ], debug=True)

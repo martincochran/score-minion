@@ -160,8 +160,8 @@ class CrawlListHandler(webapp2.RequestHandler):
     # as adding error-handling and json parsing to twitter_fetcher. Catch all 
     # errors and re-throw as a single error that callers can handle.
 
-    # TODO: looks like there might be a bug here, as multiple entities are
-    # getting added for the same account
+    # TODO: Add ancestor query for each tweet_id and user_id.  We don't expect
+    # to write more than 1/s, but these writes need to be consistent.
     parsed_tweets = []
     for json_twt in json_obj:
       twt = tweets.Tweet.fromJson(json_twt)

@@ -1,0 +1,5 @@
+# There is a queue for each type of API call to the twitter API so we can
+# avoid getting rate-limited
+queue:
+- name: list-statuses
+  rate: 12/m

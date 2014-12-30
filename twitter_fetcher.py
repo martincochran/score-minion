@@ -46,10 +46,10 @@ class TwitterFetcher:
   STATUS_URL_TMPL = '/statuses/user_timeline.json?count=%s&screen_name=%s'
   FRIENDS_URL_TMPL = '/friends/ids.json?count=%s&screen_name=%s'
   FOLLOWERS_URL_TMPL = '/friends/ids.json?count=%s&screen_name=%s'
+  LIST_LISTS_URL_TMPL = '/lists/ownerships.json?count=%s&screen_name=%s'
+  LIST_STATUSES_URL_TMPL = '/lists/statuses.json?list_id=%s&count=%s&include_rts=%s'
   SEARCH_URL = '/search/tweets.json'
   LOOKUP_USERS_URL = '/users/lookup.json'
-  LIST_LISTS_URL = '/lists/list.json'
-  LIST_STATUSES_URL = '/lists/statuses.json'
   LIST_MEMBERSHIPS_URL ='/lists/memberships.json'
   LIST_MEMBERS_URL ='/lists/members.json'
   LIST_SUBSCRIBERS_URL ='/lists/subscribers.json'
@@ -62,6 +62,11 @@ class TwitterFetcher:
 
   def LoadTimeline(self, screen_name, count=1):
     """Fetches the last count posts from the timeline of screen_name.
+
+    Args:
+      screen_name: Screen name of the user to load the timeline for.
+    Args:
+      count: Number of elements from the timeline to load.
 
     Rate limit: 300 / 15 minute window
     More info: https://dev.twitter.com/rest/reference/get/statuses/user_timeline
@@ -103,21 +108,35 @@ class TwitterFetcher:
     """
     pass
 
-  def LookupLists(self):
-    """List the lists for a given user.
+  def LookupLists(self, screen_name, count=50):
+    """List the lists owned by a given user.
 
     Rate limit: 15 / 15 minute window.
-    More info: https://dev.twitter.com/rest/reference/get/lists/list
+    More info: https://dev.twitter.com/rest/reference/get/lists/ownerships
     """
-    pass
+    url = '%s%s' % (self.API_BASE_URL, self.LIST_LISTS_URL_TMPL % (count, screen_name))
+    logging.info('Loading %s lists from %s', count, screen_name)
+    response = self._FetchResults(url)
+    return response
 
-  def ListStatuses(self):
+  def ListStatuses(self, list_id, count=100, include_rts=0):
     """Returns a timeline of tweets authored by members of the given list.
 
     Rate limit: 180 / 15 minute window.
     More info: https://dev.twitter.com/rest/reference/get/lists/statuses
+
+    Args:
+      list_id: The ID of the list
+      count: num statuses to return
+      include_rts: If 1, include retweets as well
+    Returns:
+      The response of the API call
     """
-    pass
+    url = '%s%s' % (self.API_BASE_URL,
+        self.LIST_STATUSES_URL_TMPL % (list_id, count, include_rts))
+    logging.info('Loading %s statuses from list %s', count, list_id)
+    response = self._FetchResults(url)
+    return response
 
   def ListMemberships(self):
     """Returns the lists the specified user has been added to.
@@ -190,6 +209,7 @@ class TwitterFetcher:
       return False
 
     # TODO: check on the type of errors[0]?
+    # TODO: move error checking & json parsing into this class
     error_code = errors[0].get('code', -1)
     return int(error_code) in [89, 215]
 

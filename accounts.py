@@ -19,14 +19,15 @@ import json
 import logging
 
 from google.appengine.api import users
+from google.appengine.api import memcache
 from google.appengine.ext import ndb
 
 import webapp2
 
+import crawl_lists
 import oauth_token_manager
 import tweets
 import twitter_fetcher
-
 
 MAIN_PAGE_FOOTER_TEMPLATE = """\
     <form action="/accounts/follow_account" method="post">
@@ -144,6 +145,18 @@ class DeleteAllTweetsHandler(webapp2.RequestHandler):
     tweet_query = tweets.Tweet.query()
     for tweet in tweet_query:
       tweet.key.delete()
+
+    # TODO: consolidate the logic.  Perhaps just add a task to delete the
+    # memcache entries and test it in that handler.  Avoiding cross-handler
+    # dependencies would be good for testing purposes.
+    admin_list_result = crawl_lists.ManagedLists.query(
+        ancestor=crawl_lists.lists_key()).fetch(1)
+
+    # For every list, enqueue a task to crawl that list.
+    if admin_list_result:
+      for l in admin_list_result[0].list_ids:
+        memcache.delete(key=crawl_lists.LISTS_LATEST_KEY_PREFIX + l,
+            namespace=crawl_lists.LISTS_LATEST_NAMESPACE)
     self.redirect('/accounts')
 
 

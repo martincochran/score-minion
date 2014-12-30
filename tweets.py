@@ -390,6 +390,9 @@ class Tweet(ndb.Model):
   two_or_more_integers = ndb.ComputedProperty(
       lambda self: len(self.entities.integers) > 1, 'tom')
 
+  # The list ID if this tweet was indexed by getting statuses from a list.
+  from_list = ndb.StringProperty('fl')
+
   # Keep track of which version added this data
   # TODO: consider making this part of the key, and enforcing (somehow) that
   # an app only gets read access to the data in another version.

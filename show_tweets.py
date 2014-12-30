@@ -15,21 +15,15 @@
 # limitations under the License.
 #
 
-import cgi
-import datetime
-import json
 import logging
 import os
 
-from google.appengine.api import users
 from google.appengine.ext import ndb
 
 import jinja2
 import webapp2
 
-import oauth_token_manager
 import tweets
-import twitter_fetcher
 
 
 JINJA_ENVIRONMENT = jinja2.Environment(

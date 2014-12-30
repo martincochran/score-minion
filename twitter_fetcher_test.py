@@ -228,6 +228,34 @@ class TwitterFetcherTest(unittest.TestCase):
       # Expected
       pass
 
+  def testLookupLists(self):
+    """Test basic LookupLists functionality."""
+    self.return_statuscode = [200]
+
+    # Some common fields in the response content
+    content_items = [
+        '{"lists":[{"id":186732631,"id_str":"186732631","name":"Club-Women-Teams"},',
+        '{"id":186732484,"id_str":"186732484","name":"Club-Open-Teams"}]}',
+    ]
+    self.return_content = ['[%s]' % ','.join(content_items)]
+
+    timeline = self.fetcher.LookupLists('martin_cochran')
+    self.assertEquals(200, timeline.status_code)
+
+  def testListStatuses(self):
+    """Test basic ListStatuses functionality."""
+    self.return_statuscode = [200]
+
+    # Some common fields in the response content
+    content_items = [
+        '"id_str":"542785926674399232"',
+        '"text":"I took @TheAtlantic\'s test. http:\/\/t.co\/ub2EMDIssE"',
+    ]
+    self.return_content = ['[{%s}]' % ','.join(content_items)]
+
+    timeline = self.fetcher.ListStatuses('123')
+    self.assertEquals(200, timeline.status_code)
+
 
 if __name__ == '__main__':
   unittest.main()

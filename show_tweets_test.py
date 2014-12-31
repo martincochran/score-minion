@@ -27,13 +27,12 @@ test_env_setup.SetUpAppEngineSysPath()
 import webapp2
 import webtest
 
-from google.appengine.api import users
 from google.appengine.ext import testbed
 
 import show_tweets
 import tweets
 
-class AccountsTest(unittest.TestCase):
+class ShowTweetsTest(unittest.TestCase):
   def setUp(self):
     self.testbed = testbed.Testbed()
     self.testbed.activate()

@@ -26,8 +26,10 @@ import webapp2
 
 import crawl_lists
 import oauth_token_manager
+import tweet_util
 import tweets
 import twitter_fetcher
+import user_util
 
 MAIN_PAGE_FOOTER_TEMPLATE = """\
     <form action="/accounts/follow_account" method="post">
@@ -100,26 +102,10 @@ def IndexAccountData(screen_name, num_tweets, fetcher):
     return
 
   json_obj = json.loads(tweet.content)
-  user = tweets.User.fromJson(json_obj[0].get('user', {}))
-  if user:
-    # Account clean-up:
-    # First look up to see if there are any other account objects and delete them.
-    account_query = tweets.User.query(tweets.User.id_str == user.id_str)
-    for account in account_query:
-      account.key.delete()
-    user.put()
-  else:
-    logging.info('Could not parse tweet for user %s', screen_name)
-  parsed_tweets = []
+  user_util.QueryAndSetUser(
+      tweets.User.fromJson(json_obj[0].get('user', {})))
   for json_twt in json_obj:
-    twt = tweets.Tweet.fromJson(json_twt)
-    if twt:
-      parsed_tweets.append(twt)
-    else:
-      logging.warning('Could not parse tweet from %s', json_twt)
-  for tweet in parsed_tweets:
-    logging.info('Adding tweet %s', tweet)
-    tweet.put()
+    tweet_util.QueryAndSetTweet(tweets.Tweet.fromJson(json_twt))
 
 
 class DeleteAccountHandler(webapp2.RequestHandler):

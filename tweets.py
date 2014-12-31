@@ -34,6 +34,16 @@ DATE_PARSE_FMT_STR = '%a %b %d %H:%M:%S %Y'
 APP_VERSION = os.environ.get('CURRENT_VERSION_ID', '-1')
 
 
+# We want operations on an individual user to be consistent.
+def user_key(user_id, user_table_name=DEFAULT_AUTHOR_DB_NAME):
+  return ndb.Key('User', '%s_%s' % (user_table_name, user_id)) 
+
+
+# We want operations on an individual tweet to be consistent.
+def tweet_key(tweet_id, tweet_table_name=DEFAULT_TWEET_DB_NAME):
+  return ndb.Key('Tweet', '%s_%s' % (tweet_table_name, tweet_id)) 
+
+
 def ParseTweetDateString(date_str, tweet_id='', user_id=''):
   """Parses a date string from a tweet, returning 'now' on failure.
 
@@ -405,7 +415,8 @@ class Tweet(ndb.Model):
     if not id_str:
       logging.warning('Could not parse tweet: %s', json_obj)
       return None
-    return Tweet(author_id=json_obj.get('user', {}).get('id_str', ''),
+    return Tweet(parent=tweet_key(id_str),
+        author_id=json_obj.get('user', {}).get('id_str', ''),
         author_screen_name=json_obj.get('user', {}).get('screen_name', ''),
         id_str=id_str,
         created_at=ParseTweetDateString(
@@ -515,7 +526,8 @@ class User(ndb.Model):
     id_str = json_obj.get('id_str', '')
     if not id_str:
       return None
-    return User(id_str=id_str,
+    return User(parent=user_key(id_str),
+        id_str=id_str,
         name=json_obj.get('name', ''),
         screen_name=json_obj.get('screen_name', ''),
         location=json_obj.get('location', ''),

@@ -28,8 +28,10 @@ import jinja2
 import webapp2
 
 import oauth_token_manager
+import tweet_util
 import tweets
 import twitter_fetcher
+import user_util
 
 
 LISTS_LATEST_KEY_PREFIX = 'list_latest_status_'
@@ -179,20 +181,12 @@ class CrawlListHandler(webapp2.RequestHandler):
       # Add this list ID to the tweet for bookkeeping purposes.
       twt.from_list = list_id
       parsed_tweets.append(twt)
-      user = tweets.User.fromJson(json_twt.get('user', {}))
-      if user:
-        # First look up to see if the user exists.
-        account_query = tweets.User.query(tweets.User.id_str == user.id_str)
-        accounts = account_query.fetch(5)
-        if not accounts:
-          user.put()
-      else:
-        logging.info('Could not parse tweet for user %s', screen_name)
- 
+      user_util.QueryAndSetUser(tweets.User.fromJson(json_twt.get('user', {})))
+
     num_tweets_added = len(parsed_tweets)
     for tweet in parsed_tweets:
       logging.info('Adding tweet %s', tweet.id_str)
-      tweet.put()
+      tweet_util.QueryAndSetTweet(tweet)
 
     # TODO: If there is an error between the block above and the next line, we could
     # be doing a lot of double-writes.  They should be made in a single transaction

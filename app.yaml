@@ -1,5 +1,5 @@
 application: omega-bearing-780
-version: alpha-000-011
+version: alpha-000-012
 runtime: python27
 api_version: 1
 threadsafe: no
@@ -32,6 +32,10 @@ handlers:
 
 - url: /tasks/update_lists.*
   script: crawl_lists.app
+  login: admin
+
+- url: /stats.*
+  script: stats.app
   login: admin
 
 # Main handler

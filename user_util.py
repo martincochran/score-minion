@@ -37,6 +37,8 @@ def QueryAndSetUser(user):
   # First look up to see if the user exists.
   account_query = tweets.User.query(ancestor=tweets.user_key(user.id_str))
   accounts = account_query.fetch(1)
+
+  # TODO: if we care, update user with any new fields from this user
   if accounts:
     return accounts[0]
 

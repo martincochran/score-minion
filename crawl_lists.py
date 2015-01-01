@@ -158,12 +158,9 @@ class CrawlListHandler(webapp2.RequestHandler):
 
     last_tweet, last_created_at = self._LookupLatestTweet(list_id)
 
-    # TODO: refactor logic here w/ logic from accounts.py.  Do in same swoop
-    # as adding error-handling and json parsing to twitter_fetcher. Catch all 
+    # TODO: refactor logic here add error-handling and json parsing to
+    # twitter_fetcher. Catch all 
     # errors and re-throw as a single error that callers can handle.
-
-    # TODO: Add ancestor query for each tweet_id and user_id.  We don't expect
-    # to write more than 1/s, but these writes need to be consistent.
     parsed_tweets = []
     for json_twt in json_obj:
       twt = tweets.Tweet.fromJson(json_twt)
@@ -187,9 +184,6 @@ class CrawlListHandler(webapp2.RequestHandler):
     for tweet in parsed_tweets:
       logging.info('Adding tweet %s', tweet.id_str)
       tweet_util.QueryAndSetTweet(tweet)
-
-    # TODO: If there is an error between the block above and the next line, we could
-    # be doing a lot of double-writes.  They should be made in a single transaction
 
     # Update the value of most recent tweet.
     self._UpdateLatestTweet(parsed_tweets, list_id)

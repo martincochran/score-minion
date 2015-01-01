@@ -34,32 +34,32 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 
 class ShowTweetsHandler(webapp2.RequestHandler):
   def get(self):
-    if self.request.get('show_all'):
+    if self.request.get('all'):
       tweet_query = tweets.Tweet.query().order(-tweets.Tweet.created_at)
     else:
       tweet_query = tweets.Tweet.query(
           tweets.Tweet.two_or_more_integers == True).order(-tweets.Tweet.created_at)
     account = self.request.get('user')
     if account:
-      if self.request.get('show_all'):
+      if self.request.get('all'):
         tweet_query = tweets.Tweet.query(
             tweets.Tweet.author_screen_name == account).order(-tweets.Tweet.created_at)
       else:
         tweet_query = tweets.Tweet.query(ndb.AND(tweets.Tweet.two_or_more_integers == True,
             tweets.Tweet.author_screen_name == account)).order(-tweets.Tweet.created_at)
 
-    num_tweets = 10
+    num = 10
     try:
-      num_tweets = int(self.request.get('num_tweets'))
+      num = int(self.request.get('num'))
     except ValueError:
-      logging.warning('Could not parse num_tweets from %s', self.request.get('num_tweets'))
+      logging.warning('Could not parse num from %s', self.request.get('num'))
 
-    num_tweets = min(num_tweets, 1000)
-    num_tweets = max(num_tweets, 1)
+    num = min(num, 1000)
+    num = max(num, 1)
 
     dbg = self.request.get('debug')
-    logging.info('Fetching %s tweets', num_tweets)
-    twts = tweet_query.fetch(num_tweets)
+    logging.info('Fetching %s tweets', num)
+    twts = tweet_query.fetch(num)
 
     dbg = self.request.get('debug')
 

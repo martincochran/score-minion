@@ -63,7 +63,7 @@ class ShowTweetsTest(unittest.TestCase):
     self.assertTrue(response.body.find('bob') == -1)
 
   def testShowAllGet(self):
-    response = self.testapp.get('/show_tweets?show_all=y')
+    response = self.testapp.get('/show_tweets?all=y')
     self.assertEqual(200, response.status_int)
     print response.body
     self.assertTrue(response.body.find('bob') != -1)
@@ -76,13 +76,13 @@ class ShowTweetsTest(unittest.TestCase):
     self.assertTrue(response.body.find('bob') == -1)
 
   def testNumTweetsGet(self):
-    response = self.testapp.get('/show_tweets?num_tweets=20')
+    response = self.testapp.get('/show_tweets?num=20')
     self.assertEqual(200, response.status_int)
     self.assertTrue(response.body.find('alice') != -1)
     self.assertTrue(response.body.find('bob') == -1)
 
   def testNumTweetsGet_badValue(self):
-    response = self.testapp.get('/show_tweets?num_tweets=y')
+    response = self.testapp.get('/show_tweets?num=y')
     self.assertEqual(200, response.status_int)
     self.assertTrue(response.body.find('alice') != -1)
     self.assertTrue(response.body.find('bob') == -1)
@@ -94,7 +94,7 @@ class ShowTweetsTest(unittest.TestCase):
     self.assertTrue(response.body.find('bob') == -1)
 
   def testSpecifyUser_someResults(self):
-    response = self.testapp.get('/show_tweets?user=bob&show_all=y')
+    response = self.testapp.get('/show_tweets?user=bob&all=y')
     self.assertEqual(200, response.status_int)
     self.assertTrue(response.body.find('alice') == -1)
     self.assertTrue(response.body.find('bob') != -1)

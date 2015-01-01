@@ -16,7 +16,6 @@
 #
 
 import datetime
-import json
 import logging
 import os
 
@@ -74,15 +73,15 @@ class UpdateListsRateLimitedHandler(webapp2.RequestHandler):
     """Retrieve the lists via the Twitter API and store them in the datastore."""
     token_manager = oauth_token_manager.OauthTokenManager()
     fetcher = twitter_fetcher.TwitterFetcher(token_manager)
-    fetch_response = fetcher.LookupLists(ADMIN_USER)
 
-    if (not fetch_response) or (fetch_response.status_code != 200):
+    try:
+      json_obj = fetcher.LookupLists(ADMIN_USER)
+    except twitter_fetcher.FetchError as e:
       msg = 'Could not retrieve lists for %s' % ADMIN_USER
-      logging.warning(msg)
+      logging.warning('%s: %s', msg, e)
       self.response.write(msg)
       return
 
-    json_obj = json.loads(fetch_response.content)
     list_objs = json_obj.get('lists', [])
     lists = [k.get('id_str', '') for k in list_objs]
 
@@ -146,21 +145,16 @@ class CrawlListHandler(webapp2.RequestHandler):
     token_manager = oauth_token_manager.OauthTokenManager()
     fetcher = twitter_fetcher.TwitterFetcher(token_manager)
 
-    fetch_response = fetcher.ListStatuses(list_id)
-
-    if (not fetch_response) or (fetch_response.status_code != 200):
-      msg = 'Could not retrieve lists for %s' % ADMIN_USER
-      logging.warning(msg)
+    try:
+      json_obj = fetcher.ListStatuses(list_id)
+    except twitter_fetcher.FetchError as e:
+      msg = 'Could not fetch statuses for list %s' % list_id
+      logging.warning('%s: %s', msg, e)
       self.response.write(msg)
       return
 
-    json_obj = json.loads(fetch_response.content)
-
     last_tweet, last_created_at = self._LookupLatestTweet(list_id)
 
-    # TODO: refactor logic here add error-handling and json parsing to
-    # twitter_fetcher. Catch all 
-    # errors and re-throw as a single error that callers can handle.
     parsed_tweets = []
     for json_twt in json_obj:
       twt = tweets.Tweet.fromJson(json_twt)

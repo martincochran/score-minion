@@ -20,6 +20,11 @@ import logging
 
 from google.appengine.api import urlfetch
 
+
+class FetchError(Exception):
+  """Any error that occurred with the fetch."""
+  pass
+
 class TwitterFetcher:
   """Interface with the Twitter API using the 'Application Only' API.
 
@@ -171,23 +176,45 @@ class TwitterFetcher:
     pass
 
   def _FetchResults(self, url):
-    """Try to fetch the results from the API.
+    """Tries to fetch and return the parsed json results from the API.
+
+    On a successful invocation the parsed, non-empty json object will be
+    returned. On any error, including a non-200 status code in the response,
+    a FetchError will be thrown.
 
     Args:
       url: (string) URL to fetch
     Returns:
-      The response object from the Http.request() method.
+      The parsed json from the content of the response to the Http.request() method.
+    Throws:
+      FetchError on any underlying error or a non-200 status code response.
     """
     headers = self._BuildHeaders()
-    response = urlfetch.fetch(url, headers=self._BuildHeaders())
 
-    # Check to see if we need to re-authenticate to get a new token.
-    if self._ShouldReAuthenticate(response):
-      self._ReAuthenticate()
-      # Try again, once.
+    try:
       response = urlfetch.fetch(url, headers=self._BuildHeaders())
 
-    return response
+      # Check to see if we need to re-authenticate to get a new token.
+      if self._ShouldReAuthenticate(response):
+        self._ReAuthenticate()
+        # Try again, once.
+        response = urlfetch.fetch(url, headers=self._BuildHeaders())
+    except urlfetch.Error as e:
+      logging.warning('Could not fetch URL %s: %s', url, e)
+      raise FetchError(e)
+
+    if response.status_code != 200:
+      raise FetchError('Response code not 200: %s' % response)
+
+    try:
+      json_obj = json.loads(response.content)
+    except ValueError as e:
+      raise FetchError('Could not parse json response: %s' % response.content, e)
+
+    if not json_obj:
+      raise FetchError('Empty json response: %s' % response)
+
+    return json_obj
 
   def _BuildHeaders(self):
     return {'Authorization': 'Bearer %s' % self.bearer_token}
@@ -208,8 +235,10 @@ class TwitterFetcher:
     if not errors:
       return False
 
-    # TODO: check on the type of errors[0]?
-    # TODO: move error checking & json parsing into this class
+    if type(errors) != list:
+      return True
+    if type(errors[0]) != dict:
+      return True
     error_code = errors[0].get('code', -1)
     return int(error_code) in [89, 215]
 

@@ -92,6 +92,14 @@ class CrawlListsTest(unittest.TestCase):
     self.assertEquals(1, len(list_entries[0].list_ids))
     self.assertEquals('1234', list_entries[0].list_ids[0])
 
+  def testUpdateLists_retrievalError(self):
+    self.return_statuscode = [200]
+    self.return_content = ['']
+
+    response = self.testapp.get('/tasks/update_lists_rate_limited')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('Could not retrieve lists') != -1)
+
   def testUpdateLists_withSavedListNoUpdate(self):
     # Return one list from the API, and store it.
     self.return_statuscode = [200]
@@ -205,6 +213,14 @@ class CrawlListsTest(unittest.TestCase):
     self.assertEquals(2, len(user_db))
     for user in user_db:
       self.assertIn(user.id_str, ['2', '3'])
+
+  def testCrawlList_retrievalError(self):
+    self.return_statuscode = [200]
+    self.return_content = ['']
+
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('Could not fetch statuses') != -1)
 
   def testCrawlList_incrementalNewTweets(self):
     self.return_statuscode = [200]

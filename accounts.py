@@ -15,7 +15,6 @@
 # limitations under the License.
 #
 
-import json
 import logging
 
 from google.appengine.api import users
@@ -96,12 +95,12 @@ def IndexAccountData(screen_name, num_tweets, fetcher):
     num_tweets: The number of tweets to index
     fetcher: The twitter_fetcher.TwitterFetcher object used for fetching
   """
-  tweet = fetcher.LoadTimeline(screen_name, count=num_tweets)
-  if tweet.status_code != 200:
-    logging.info('Could not load tweet for user %s', screen_name)
+  try:
+    json_obj = fetcher.LoadTimeline(screen_name, count=num_tweets)
+  except twitter_fetcher.FetchError as e:
+    logging.warning('Could not load timeline for user %s', screen_name)
     return
 
-  json_obj = json.loads(tweet.content)
   user_util.QueryAndSetUser(
       tweets.User.fromJson(json_obj[0].get('user', {})))
   for json_twt in json_obj:

@@ -83,25 +83,32 @@ class TwitterFetcherTest(unittest.TestCase):
         '"in_reply_to_user_id":null',
         '"in_reply_to_user_id_str":null',
     ]
-    self.return_content = ['[%s]' % ','.join(content_items)]
+    self.return_content = ['[{%s}]' % ','.join(content_items)]
 
-    timeline = self.fetcher.LoadTimeline('martin_cochran')
-    self.assertEquals(200, timeline.status_code)
+    json_obj = self.fetcher.LoadTimeline('martin_cochran')
+    self.assertEquals(type(json_obj), list)
 
   def testLoadTimeline_badMemberId(self):
     """Verify that getting a 404 reponse is handled correctly."""
     self.return_statuscode = [404]
     self.return_content = ['{"errors":[{"message":"Sorry, that page does not exist","code":34}]}']
-    timeline = self.fetcher.LoadTimeline('bad_twitter_member_id')
-    self.assertEquals(404, timeline.status_code)
+
+    try:
+      timeline = self.fetcher.LoadTimeline('bad_twitter_member_id')
+    except twitter_fetcher.FetchError:
+      # Expected
+      pass
 
   def testLoadTimeline_badlyFormattedRequest(self):
     """Verify that getting a 400 reponse is handled correctly."""
     self.return_statuscode = [400]
     self.return_content = ['']
 
-    timeline = self.fetcher.LoadTimeline('%s')
-    self.assertEquals(400, timeline.status_code)
+    try:
+      timeline = self.fetcher.LoadTimeline('%s')
+    except twitter_fetcher.FetchError:
+      # Expected
+      pass
 
   def testVerifyReauthenicatedCalledOnError(self):
     """Verify that needing to refresh token is handled correctly."""
@@ -111,21 +118,19 @@ class TwitterFetcherTest(unittest.TestCase):
     self.return_content = [
         '{"errors":[{"message":"Invalid or expired token","code":89}]}',
         '{"token_type":"bearer","access_token":"new access token"}',
-        '',
+        '{"id_str": "1"}',
     ]
     timeline = self.fetcher.LoadTimeline('martin_cochran')
-    self.assertEquals(200, timeline.status_code)
 
   def testReAuthenticate(self):
     self.return_statuscode = [200, 200]
     self.return_content = [
         '{"token_type":"bearer","access_token":"new access token"}',
-        '',
+        '{"id_str": "1"}',
     ]
 
     self.fetcher._ReAuthenticate()
     timeline = self.fetcher.LoadTimeline('martin_cochran')
-    self.assertEquals(200, timeline.status_code)
 
   def testHandleTooManyRedirects(self):
     def _FakeFetch(url, payload, method, headers, request, response,
@@ -135,11 +140,10 @@ class TwitterFetcherTest(unittest.TestCase):
           urlfetch_service_pb.URLFetchServiceError.TOO_MANY_REDIRECTS)
 
     self.url_fetch_stub._RetrieveURL = _FakeFetch
-    # TODO: handle this in the class?
     try:
       timeline = self.fetcher.LoadTimeline('martin_cochran')
       self.fail('Should have thrown an error')
-    except urlfetch.TooManyRedirectsError as e:
+    except twitter_fetcher.FetchError as e:
       # Expected
       pass
 
@@ -152,11 +156,10 @@ class TwitterFetcherTest(unittest.TestCase):
 
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
-    # TODO: handle this in the class?
     try:
       timeline = self.fetcher.LoadTimeline('martin_cochran')
       self.fail('Should have thrown an error')
-    except urlfetch.InvalidURLError as e:
+    except twitter_fetcher.FetchError as e:
       # Expected
       pass
 
@@ -169,11 +172,10 @@ class TwitterFetcherTest(unittest.TestCase):
 
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
-    # TODO: handle this in the class?
     try:
       timeline = self.fetcher.LoadTimeline('martin_cochran')
       self.fail('Should have thrown an error')
-    except urlfetch.DownloadError as e:
+    except twitter_fetcher.FetchError as e:
       # Expected
       pass
 
@@ -186,11 +188,10 @@ class TwitterFetcherTest(unittest.TestCase):
 
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
-    # TODO: handle this in the class?
     try:
       timeline = self.fetcher.LoadTimeline('martin_cochran')
       self.fail('Should have thrown an error')
-    except urlfetch.ResponseTooLargeError as e:
+    except twitter_fetcher.FetchError as e:
       # Expected
       pass
 
@@ -203,11 +204,10 @@ class TwitterFetcherTest(unittest.TestCase):
 
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
-    # TODO: handle this in the class?
     try:
       timeline = self.fetcher.LoadTimeline('martin_cochran')
       self.fail('Should have thrown an error')
-    except urlfetch.DownloadError as e:
+    except twitter_fetcher.FetchError as e:
       # Expected
       pass
 
@@ -220,11 +220,10 @@ class TwitterFetcherTest(unittest.TestCase):
 
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
-    # TODO: handle this in the class?
     try:
       timeline = self.fetcher.LoadTimeline('martin_cochran')
       self.fail('Should have thrown an error')
-    except urlfetch.DownloadError as e:
+    except twitter_fetcher.FetchError as e:
       # Expected
       pass
 
@@ -234,13 +233,13 @@ class TwitterFetcherTest(unittest.TestCase):
 
     # Some common fields in the response content
     content_items = [
-        '{"lists":[{"id":186732631,"id_str":"186732631","name":"Club-Women-Teams"},',
-        '{"id":186732484,"id_str":"186732484","name":"Club-Open-Teams"}]}',
+        '"lists":[{"id":186732631,"id_str":"186732631","name":"Club-Women-Teams"},',
+        '{"id":186732484,"id_str":"186732484","name":"Club-Open-Teams"}]',
     ]
-    self.return_content = ['[%s]' % ','.join(content_items)]
+    self.return_content = ['{%s}' % ''.join(content_items)]
 
-    timeline = self.fetcher.LookupLists('martin_cochran')
-    self.assertEquals(200, timeline.status_code)
+    json_obj = self.fetcher.LookupLists('martin_cochran')
+    self.assertEquals(type(json_obj), dict)
 
   def testListStatuses(self):
     """Test basic ListStatuses functionality."""
@@ -253,8 +252,8 @@ class TwitterFetcherTest(unittest.TestCase):
     ]
     self.return_content = ['[{%s}]' % ','.join(content_items)]
 
-    timeline = self.fetcher.ListStatuses('123')
-    self.assertEquals(200, timeline.status_code)
+    json_obj = self.fetcher.ListStatuses('123')
+    self.assertEquals(type(json_obj), list)
 
 
 if __name__ == '__main__':

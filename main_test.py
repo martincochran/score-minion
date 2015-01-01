@@ -47,7 +47,7 @@ class MainTest(unittest.TestCase):
     self.url_fetch_stub = self.testbed.get_stub(testbed.URLFETCH_SERVICE_NAME)
 
     self.return_statuscode = [200]
-    self.return_content = ['test response']
+    self.return_content = ['{"text": "test response"}']
 
     # Stub out the call to fetch the URL
     def _FakeFetch(url, payload, method, headers, request, response,

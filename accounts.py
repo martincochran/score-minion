@@ -25,10 +25,8 @@ import webapp2
 
 import crawl_lists
 import oauth_token_manager
-import tweet_util
 import tweets
 import twitter_fetcher
-import user_util
 
 MAIN_PAGE_FOOTER_TEMPLATE = """\
     <form action="/accounts/follow_account" method="post">
@@ -101,10 +99,9 @@ def IndexAccountData(screen_name, num_tweets, fetcher):
     logging.warning('Could not load timeline for user %s', screen_name)
     return
 
-  user_util.QueryAndSetUser(
-      tweets.User.fromJson(json_obj[0].get('user', {})))
+  tweets.User.getOrInsertFromJson(json_obj[0].get('user', {}))
   for json_twt in json_obj:
-    tweet_util.QueryAndSetTweet(tweets.Tweet.fromJson(json_twt))
+    tweets.Tweet.getOrInsertFromJson(json_twt)
 
 
 class DeleteAccountHandler(webapp2.RequestHandler):

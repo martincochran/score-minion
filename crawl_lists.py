@@ -27,10 +27,8 @@ import jinja2
 import webapp2
 
 import oauth_token_manager
-import tweet_util
 import tweets
 import twitter_fetcher
-import user_util
 
 
 LISTS_LATEST_KEY_PREFIX = 'list_latest_status_'
@@ -145,81 +143,36 @@ class CrawlListHandler(webapp2.RequestHandler):
     token_manager = oauth_token_manager.OauthTokenManager()
     fetcher = twitter_fetcher.TwitterFetcher(token_manager)
 
+    last_tweet, last_created_at = self._LookupLatestTweet(list_id)
+
     try:
-      json_obj = fetcher.ListStatuses(list_id)
+      json_obj = fetcher.ListStatuses(list_id, since_id=last_tweet)
     except twitter_fetcher.FetchError as e:
       msg = 'Could not fetch statuses for list %s' % list_id
       logging.warning('%s: %s', msg, e)
       self.response.write(msg)
       return
 
-    last_tweet, last_created_at = self._LookupLatestTweet(list_id)
-
     parsed_tweets = []
     for json_twt in json_obj:
-      twt = tweets.Tweet.fromJson(json_twt)
+      twt = tweets.Tweet.getOrInsertFromJson(json_twt, from_list=list_id)
       if not twt:
         logging.warning('Could not parse tweet from %s', json_twt)
         continue
 
-      if self._HaveSeenTweetBefore(twt.id_str, twt.created_at,
-          last_tweet, last_created_at):
-        # We've seen this tweet before, which means we're caught up in the
-        # stream.  No need to continue
-        logging.info('Caught up to indexed stream at status id %s', twt.id_str)
-        break
-
       # Add this list ID to the tweet for bookkeeping purposes.
-      twt.from_list = list_id
       parsed_tweets.append(twt)
-      user_util.QueryAndSetUser(tweets.User.fromJson(json_twt.get('user', {})))
+      tweets.User.getOrInsertFromJson(json_twt.get('user', {}))
 
     num_tweets_added = len(parsed_tweets)
     for tweet in parsed_tweets:
       logging.info('Adding tweet %s', tweet.id_str)
-      tweet_util.QueryAndSetTweet(tweet)
+      #tweet_util.QueryAndSetTweet(tweet)
 
     # Update the value of most recent tweet.
     self._UpdateLatestTweet(parsed_tweets, list_id)
 
     self.response.write('Added %s tweets to db' % num_tweets_added)
-
-  def _HaveSeenTweetBefore(self, tweet_id, created_at,
-      latest_tweet_id, latest_created_at):
-    """Returns true if we've processed this tweet before.
-
-    We optimize this for speed and to minimize DB lookups.  Tweet IDs are
-    generally increasing, but are not guaranteed to be monotonically increasing,
-    so we need to check the creation date in addition to the id, though the
-    ID should be enough in almost all cases.
-    """
-    # This will be the common case - we catch up the to stream with a tweet
-    # we've seen before.
-    logging.info('tweet ids: %s %s', tweet_id, latest_tweet_id)
-    if tweet_id == latest_tweet_id:
-      return True
-
-    # If there are no tweets in the datastore for the list, then we haven't seen
-    # it before.
-    if (not latest_tweet_id) or (not latest_created_at):
-      return False
-
-    if tweet_id > latest_tweet_id and created_at > latest_created_at:
-      return False
-
-    if tweet_id < latest_tweet_id and created_at < latest_created_at:
-      return True
-
-    # Now we're in grey area where the created_at date is the same, which
-    # should be very rare. Twitter generates the last few bits randomly, so we
-    # also cannot rely on the value of the tweet id.
-    #
-    # In this case we do a datastore lookup.
-    tweet_query = tweets.Tweet.query(ancestor=tweets.tweet_key(tweet_id))
-    if tweet_query.fetch(1):
-      return True
-
-    return False
 
   # TODO: consider making this and other datastore writes in this function
   # transactional to be more resilient to errors / bugs / API service outages.
@@ -259,7 +212,8 @@ class CrawlListHandler(webapp2.RequestHandler):
     Returns:
       Pair of (tweet.id_str, tweet.created_at) date for the latest 'tweet' in db for that list.
     """
-    # This is a little tricky since we're not using ancestor queries and a consistent datastore
+    # This won't necessarily be consistent, but we will never double-write
+    # tweets since we call get_or_insert.
     cache_latest = memcache.get(
         key=LISTS_LATEST_KEY_PREFIX + list_id, namespace=LISTS_LATEST_NAMESPACE)
     if cache_latest:

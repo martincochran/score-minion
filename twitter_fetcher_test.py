@@ -247,12 +247,12 @@ class TwitterFetcherTest(unittest.TestCase):
 
     # Some common fields in the response content
     content_items = [
-        '"id_str":"542785926674399232"',
+        '"id_str":"186815046"',
         '"text":"I took @TheAtlantic\'s test. http:\/\/t.co\/ub2EMDIssE"',
     ]
     self.return_content = ['[{%s}]' % ','.join(content_items)]
 
-    json_obj = self.fetcher.ListStatuses('123')
+    json_obj = self.fetcher.ListStatuses('186815046')
     self.assertEquals(type(json_obj), list)
 
 

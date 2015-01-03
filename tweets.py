@@ -363,6 +363,7 @@ class Tweet(ndb.Model):
   author_id = ndb.StringProperty('a', required=True)
 
   # Screen name of the author
+  # TODO: remove.  We'll look this up on demand using memcache.
   author_screen_name = ndb.StringProperty('an', required=True)
 
   # Date & time the tweet was authored
@@ -435,24 +436,33 @@ class Tweet(ndb.Model):
   from_list = ndb.StringProperty('fl')
 
   # Keep track of which version added this data
-  # TODO: consider making this part of the key, and enforcing (somehow) that
-  # an app only gets read access to the data in another version.
   added_by_app_version = ndb.StringProperty('ver', required=True)
 
   @classmethod
-  def fromJson(cls, json_obj):
+  def getOrInsertFromJson(cls, json_obj, from_list=None):
     """Builds a Tweet object from a json object."""
+    return cls.__BuildConstructorArgs(json_obj, True, from_list=from_list)
+
+  @classmethod
+  def fromJson(cls, json_obj, from_list=None):
+    """Builds a Tweet object from a json object."""
+    return Tweet.__BuildConstructorArgs(json_obj, False, from_list=from_list)
+
+  @classmethod
+  def __BuildConstructorArgs(cls, json_obj, insert, from_list=None):
     id_str = json_obj.get('id_str', '')
     if not id_str:
-      logging.warning('Could not parse tweet: %s', json_obj)
+      logging.warning('could not parse tweet: %s', json_obj)
       return None
-    return Tweet(parent=tweet_key(id_str),
+    # todo: async?
+    return Tweet.__BuildObject(id_str, insert, parent=tweet_key(id_str),
         author_id=json_obj.get('user', {}).get('id_str', ''),
         author_screen_name=json_obj.get('user', {}).get('screen_name', ''),
         id_str=id_str,
         created_at=ParseTweetDateString(
           json_obj.get('created_at', ''), tweet_id=id_str),
         added_by_app_version=APP_VERSION,
+        from_list=from_list,
         text=json_obj.get('text', ''),
         source=json_obj.get('source', ''),
         in_reply_to_status_id=json_obj.get('in_reply_to_status_id_str', ''),
@@ -465,6 +475,13 @@ class Tweet(ndb.Model):
           tweet_text=json_obj.get('text', '')),
         original_json=json.dumps(json_obj),
         lang=json_obj.get('lang', ''))
+
+  @classmethod
+  def __BuildObject(cls, tweet_id, insert, **kwargs):
+    if insert:
+      return Tweet.get_or_insert(tweet_id, **kwargs)
+    else:
+      return cls(id=tweet_id, **kwargs)
 
   def toJsonString(self):
     """Write this object to json string.
@@ -566,12 +583,40 @@ class User(ndb.Model):
   added_by_app_version = ndb.StringProperty('ver', required=True)
 
   @classmethod
+  def getOrInsertFromJson(cls, json_obj):
+    id_str = json_obj.get('id_str', '')
+    if not id_str:
+      return None
+    return User.get_or_insert(id_str, parent=user_key(id_str),
+        id_str=id_str,
+        name=json_obj.get('name', ''),
+        screen_name=json_obj.get('screen_name', ''),
+        location=json_obj.get('location', ''),
+        description=json_obj.get('description', ''),
+        url=json_obj.get('url', ''),
+        created_at=ParseTweetDateString(
+          json_obj.get('created_at', ''), user_id=id_str),
+        protected=json_obj.get('protected', False),
+        favourites_count=json_obj.get('favourites_count', 0L),
+        utc_offset=json_obj.get('utc_offset', 0L),
+        time_zone=json_obj.get('time_zone', ''),
+        geo_enabled=json_obj.get('geo_enabled', False),
+        verified=json_obj.get('verified', False),
+        statuses_count=json_obj.get('statuses_count', 0L),
+        lang=json_obj.get('lang', ''),
+        profile_image_url_https=json_obj.get('profile_image_url_https', ''),
+        profile_banner_url_https=json_obj.get('profile_banner_url', ''),
+        followers_count=json_obj.get('followers_count', 0L),
+        friends_count=json_obj.get('friends_count', 0L),
+        added_by_app_version=APP_VERSION)
+
+  @classmethod
   def fromJson(cls, json_obj):
     """Builds a User object from a json object."""
     id_str = json_obj.get('id_str', '')
     if not id_str:
       return None
-    return User(parent=user_key(id_str),
+    return User(id=id_str, parent=user_key(id_str),
         id_str=id_str,
         name=json_obj.get('name', ''),
         screen_name=json_obj.get('screen_name', ''),

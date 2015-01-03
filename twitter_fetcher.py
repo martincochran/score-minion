@@ -48,13 +48,13 @@ class TwitterFetcher:
   API_BASE_URL = 'https://api.twitter.com/1.1'
 
   # TODO: change the parameter to user ids, which is stable
-  STATUS_URL_TMPL = '/statuses/user_timeline.json?count=%s&screen_name=%s'
-  FRIENDS_URL_TMPL = '/friends/ids.json?count=%s&screen_name=%s'
-  FOLLOWERS_URL_TMPL = '/friends/ids.json?count=%s&screen_name=%s'
-  LIST_LISTS_URL_TMPL = '/lists/ownerships.json?count=%s&screen_name=%s'
-  LIST_STATUSES_URL_TMPL = '/lists/statuses.json?list_id=%s&count=%s&include_rts=%s'
+  STATUS_URL = '/statuses/user_timeline.json'
+  FRIENDS_URL = '/friends/ids.json'
+  FOLLOWERS_URL = '/friends/ids.json'
   SEARCH_URL = '/search/tweets.json'
   LOOKUP_USERS_URL = '/users/lookup.json'
+  LIST_LISTS_URL = '/lists/ownerships.json'
+  LIST_STATUSES_URL = '/lists/statuses.json'
   LIST_MEMBERSHIPS_URL ='/lists/memberships.json'
   LIST_MEMBERS_URL ='/lists/members.json'
   LIST_SUBSCRIBERS_URL ='/lists/subscribers.json'
@@ -76,9 +76,13 @@ class TwitterFetcher:
     Rate limit: 300 / 15 minute window
     More info: https://dev.twitter.com/rest/reference/get/statuses/user_timeline
     """
-    url = '%s%s' % (self.API_BASE_URL, self.STATUS_URL_TMPL % (count, screen_name))
-    logging.info('Loading last %s posts from timeline for %s', count, screen_name)
-    response = self._FetchResults(url)
+    url = '%s%s' % (self.API_BASE_URL, self.STATUS_URL)
+    params = {
+      'count': count,
+      'screen_name': screen_name,
+    }
+
+    response = self._FetchResults(url, params=params)
     return response
 
   def Search(self):
@@ -119,12 +123,16 @@ class TwitterFetcher:
     Rate limit: 15 / 15 minute window.
     More info: https://dev.twitter.com/rest/reference/get/lists/ownerships
     """
-    url = '%s%s' % (self.API_BASE_URL, self.LIST_LISTS_URL_TMPL % (count, screen_name))
-    logging.info('Loading %s lists from %s', count, screen_name)
-    response = self._FetchResults(url)
+    url = '%s%s' % (self.API_BASE_URL, self.LIST_LISTS_URL)
+    params = {
+      'count': count,
+      'screen_name': screen_name,
+    }
+
+    response = self._FetchResults(url, params=params)
     return response
 
-  def ListStatuses(self, list_id, count=100, include_rts=0):
+  def ListStatuses(self, list_id, count=200, include_rts=0, since_id=None):
     """Returns a timeline of tweets authored by members of the given list.
 
     Rate limit: 180 / 15 minute window.
@@ -134,13 +142,21 @@ class TwitterFetcher:
       list_id: The ID of the list
       count: num statuses to return
       include_rts: If 1, include retweets as well
+      since_id: (optional) If supplied, fetch only tweets more recent than that
+        id.
     Returns:
       The response of the API call
     """
-    url = '%s%s' % (self.API_BASE_URL,
-        self.LIST_STATUSES_URL_TMPL % (list_id, count, include_rts))
-    logging.info('Loading %s statuses from list %s', count, list_id)
-    response = self._FetchResults(url)
+    url = '%s%s' % (self.API_BASE_URL, self.LIST_STATUSES_URL)
+    params = {
+      'count': count,
+      'list_id': list_id,
+      'include_rts': include_rts,
+    }
+    if since_id:
+      params['since_id'] = since_id
+
+    response = self._FetchResults(url, params=params)
     return response
 
   def ListMemberships(self):
@@ -175,7 +191,7 @@ class TwitterFetcher:
     """
     pass
 
-  def _FetchResults(self, url):
+  def _FetchResults(self, url, params={}):
     """Tries to fetch and return the parsed json results from the API.
 
     On a successful invocation the parsed, non-empty json object will be
@@ -184,12 +200,17 @@ class TwitterFetcher:
 
     Args:
       url: (string) URL to fetch
+      params: Dictionary of parameter to add to get requests
     Returns:
       The parsed json from the content of the response to the Http.request() method.
     Throws:
       FetchError on any underlying error or a non-200 status code response.
     """
-    headers = self._BuildHeaders()
+    logging.info('Loading results from URL %s, %s', url, params)
+
+    param_str = '&'.join(['%s=%s' % (i[0], i[1]) for i in params.iteritems()])
+    if param_str:
+      url = '%s?%s' % (url, param_str)
 
     try:
       response = urlfetch.fetch(url, headers=self._BuildHeaders())
@@ -204,7 +225,8 @@ class TwitterFetcher:
       raise FetchError(e)
 
     if response.status_code != 200:
-      raise FetchError('Response code not 200: %s' % response)
+      raise FetchError('Response code not 200: %s, %s' % (response.status_code,
+          response.content))
 
     try:
       json_obj = json.loads(response.content)

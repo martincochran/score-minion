@@ -35,19 +35,12 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 
 class ShowTweetsHandler(webapp2.RequestHandler):
   def get(self):
-    if self.request.get('all'):
-      tweet_query = tweets.Tweet.query().order(-tweets.Tweet.created_at)
-    else:
-      tweet_query = tweets.Tweet.query(
-          tweets.Tweet.two_or_more_integers == True).order(-tweets.Tweet.created_at)
+    tweet_query = tweets.Tweet.query().order(-tweets.Tweet.created_at)
+    if not self.request.get('all'):
+      tweet_query = tweet_query.filter(tweets.Tweet.two_or_more_integers == True)
     account = self.request.get('user')
     if account:
-      if self.request.get('all'):
-        tweet_query = tweets.Tweet.query(
-            tweets.Tweet.author_screen_name == account).order(-tweets.Tweet.created_at)
-      else:
-        tweet_query = tweets.Tweet.query(ndb.AND(tweets.Tweet.two_or_more_integers == True,
-            tweets.Tweet.author_screen_name == account)).order(-tweets.Tweet.created_at)
+      tweet_query = tweet_query.filter(tweets.Tweet.author_screen_name == account)
 
     num = 10
     try:
@@ -58,11 +51,8 @@ class ShowTweetsHandler(webapp2.RequestHandler):
     num = min(num, 1000)
     num = max(num, 1)
 
-    dbg = self.request.get('debug')
     logging.info('Fetching %s tweets', num)
     twts = tweet_query.fetch(num)
-
-    dbg = self.request.get('debug')
 
     # Shift UTC dates to PST
     secs = 8 * 60 * 60

@@ -154,35 +154,13 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     self.assertTweetDbContents(['1'], '123')
 
-    # Now update it again - there should be one new entries
+    # Now update it again - there should be one new entry
     self.SetTimelineResponse(self.CreateTweet(4, ('alice', 3)))
 
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
     self.assertTweetDbContents(['1', '4'], '123')
 
-  def testCrawlList_incrementalOldTweets(self):
-    now = datetime.datetime.now()
-    self.SetTimelineResponse(self.CreateTweet(4, ('bob', 3), created_at=now))
-
-    response = self.testapp.get('/tasks/crawl_list?list_id=123')
-    self.assertEqual(200, response.status_int)
-
-    self.assertTweetDbContents(['4'], '123')
-
-    # Now update it again - there should be one new entries.  The 2nd entry is
-    # too old and has too low a status ID to be indexed.  The indexer stops
-    # looking at the timeline at that point.
-    self.SetTimelineResponse(
-        [self.CreateTweet(6, ('alice', 5), created_at=now + datetime.timedelta(1, 0, 0)),
-        self.CreateTweet(1, ('bob', 2), created_at=now - datetime.timedelta(1, 0, 0)),
-        self.CreateTweet(8, ('bob', 7), created_at=now + datetime.timedelta(2, 0, 0))])
-
-    response = self.testapp.get('/tasks/crawl_list?list_id=123')
-    self.assertEqual(200, response.status_int)
-
-    self.assertTweetDbContents(['6', '4'], '123')
- 
   def testCrawlList_noId(self):
     response = self.testapp.get('/tasks/crawl_list')
     self.assertEqual(200, response.status_int)

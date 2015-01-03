@@ -214,14 +214,8 @@ class CrawlListHandler(webapp2.RequestHandler):
     # should be very rare. Twitter generates the last few bits randomly, so we
     # also cannot rely on the value of the tweet id.
     #
-    # In this case we do a datastore lookup.  Since we're
-    # not using a consistent view of the datastore it's possible that this is
-    # also incorrect, but in the worst case that means we write the data to the
-    # store multiple times (rather than omit it).
-    #
-    # TODO: investigate whether or not the UTC handling in the tweet parser
-    # would lead to a lot of lookups here.
-    tweet_query = tweets.Tweet.query(tweets.Tweet.id_str == tweet_id)
+    # In this case we do a datastore lookup.
+    tweet_query = tweets.Tweet.query(ancestor=tweets.tweet_key(tweet_id))
     if tweet_query.fetch(1):
       return True
 

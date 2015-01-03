@@ -246,6 +246,18 @@ class TweetTest(unittest.TestCase):
     dt = tweets.ParseTweetDateString(data_str)
     self.assertEqual(datetime.datetime(2012, 5, 2, 3, 21, 39), dt)
 
+    data_str = 'Wed May 02 03:21:39 +0130 2012'
+    dt = tweets.ParseTweetDateString(data_str)
+    self.assertEqual(datetime.datetime(2012, 5, 2, 1, 51, 39), dt)
+
+    data_str = 'Wed May 02 03:21:39 -1000 2012'
+    dt = tweets.ParseTweetDateString(data_str)
+    self.assertEqual(datetime.datetime(2012, 5, 2, 13, 21, 39), dt)
+
+    data_str = 'Wed May 02 03:21:39 -b??a 2012'
+    dt = tweets.ParseTweetDateString(data_str)
+    self.assertEqual(datetime.datetime(2012, 5, 2, 3, 21, 39), dt)
+
   def testParseGeoData(self):
     geo_obj = None
     self.assertEqual(None, tweets.ParseGeoData(geo_obj))

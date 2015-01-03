@@ -8,7 +8,7 @@
     <table>
       <tr>
         <td><b>Tweet text</b></td>
-        <td><b>Date</b></td> <! TODO: Date is UTC, which is 8 hours ahead>
+        <td><b>Date</b></td>
         <td><b>Author</b></td>
         {% if debug %}
         <td><b>Num Entities</b></td>
@@ -17,10 +17,10 @@
         <td><b>Json</b></td>
         {% endif %}
       </tr>
-      {% for tweet in tweets %}
+      {% for tweet, date in tweets_and_dates %}
       <tr>
       <td>{{ tweet.text }}</td>
-      <td>{{ tweet.created_at }}</td>
+      <td>{{ date.strftime('%c')}}</td>
       <td>{{ tweet.author_screen_name }}</td>
       {% if debug %}
       <td>{{ tweet.num_entities }}</td>

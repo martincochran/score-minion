@@ -56,20 +56,46 @@ def ParseTweetDateString(date_str, tweet_id='', user_id=''):
     id_value, date_type = CalculateDateType(tweet_id, user_id)
     logging.warning('Empty creation date in %s id %s', date_type, id_value)
     return datetime.datetime.now()
-  # We have to strip the UTC format because it is not supported on all
-  # platforms.
   try:
+    # Convert to UTC time by manually parsing the timedelta because it is not
+    # supported on all platforms.
+    td = ParseUtcTimeDelta(date_str[-10:-5])
     return datetime.datetime.strptime('%s %s' % (date_str[:-11], date_str[-4:]),
-        DATE_PARSE_FMT_STR)
+        DATE_PARSE_FMT_STR) + td
   except ValueError:
     logging.warning('Failed to parse date "%s" from tweet id %s',
         date_str, tweet_id)
     return datetime.datetime.now()
-  # TODO: manually parse UTC offset and perform operation on resulting DT object?
+
+
+def ParseUtcTimeDelta(td_str):
+  """Manually parse the UTC timedelta from the string (not supported some places).
+
+  Args:
+    td_str: Timedelta string of the form specified for the '%z' format
+      specifier in strftime.
+  Returns:
+    A timedelta object.
+  """
+  # The most common case - let's make this easy.
+  if td_str == '+0000':
+    return datetime.timedelta(0, 0, 0)
+  if td_str[0] not in ['-', '+'] or len(td_str) != 5:
+    logging.warning('Bad UTC offset: %s', td_str)
+    return datetime.timedelta(0, 0, 0)
+  try:
+    int(td_str[1:5])
+  except ValueError:
+    logging.warning('Bad UTC offset: %s', td_str)
+    return datetime.timedelta(0, 0, 0)
+
+  seconds = int(td_str[1:3])*3600 + int(td_str[3:])*60
+  if td_str[0] == '-':
+    return datetime.timedelta(0, seconds, 0)
+  return datetime.timedelta(-1, (24 * 3600) - seconds, 0)
 
 
 def WriteTweetDateString(dt):
-  # TODO: Need to fix UTC offset stuff so this works.  See above TODO.
   return '%s +0000 %s' % (dt.strftime('%a %b %d %H:%M:%S'), dt.strftime('%Y'))
 
 

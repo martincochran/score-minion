@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 
+import datetime
 import logging
 import os
 
@@ -63,8 +64,14 @@ class ShowTweetsHandler(webapp2.RequestHandler):
 
     dbg = self.request.get('debug')
 
+    # Shift UTC dates to PST
+    secs = 8 * 60 * 60
+    dates = [d.created_at - datetime.timedelta(0, secs, 0) for d in twts]
+
+    tweets_and_dates = zip(twts, dates)
+
     template_values = {
-      'tweets': twts,
+      'tweets_and_dates': tweets_and_dates,
       'debug': self.request.get('debug'),
     }
 

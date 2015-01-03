@@ -53,7 +53,6 @@ class ShowTweetsTest(web_test_base.WebTestBase):
   def testShowAllGet(self):
     response = self.testapp.get('/show_tweets?all=y')
     self.assertEqual(200, response.status_int)
-    print response.body
     self.assertTrue(response.body.find('bob') != -1)
     self.assertTrue(response.body.find('alice') != -1)
 

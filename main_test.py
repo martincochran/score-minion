@@ -16,63 +16,31 @@
 #
 
 import mock
-from mock import patch
-
 import unittest
+import webtest
 
 import test_env_setup
 
 # Must be done before importing any AE libraries
 test_env_setup.SetUpAppEngineSysPath()
-
-import webapp2
-import webtest
-
-from google.appengine.api import urlfetch
-from google.appengine.api import urlfetch_stub
 from google.appengine.api import users
-from google.appengine.ext import testbed
 
 import main
+import web_test_base
 
-class MainTest(unittest.TestCase):
+
+class MainTest(web_test_base.WebTestBase):
   def setUp(self):
-
-    self.testbed = testbed.Testbed()
-    self.testbed.activate()
-    self.testbed.init_urlfetch_stub()
-    self.testbed.init_memcache_stub()
-    self.testbed.init_datastore_v3_stub()
-    self.testbed.init_user_stub()
-    self.url_fetch_stub = self.testbed.get_stub(testbed.URLFETCH_SERVICE_NAME)
-
-    self.return_statuscode = [200]
-    self.return_content = ['{"text": "test response"}']
-
-    # Stub out the call to fetch the URL
-    def _FakeFetch(url, payload, method, headers, request, response,
-        follow_redirects=True, deadline=urlfetch_stub._API_CALL_DEADLINE,
-        validate_certificate=urlfetch_stub._API_CALL_VALIDATE_CERTIFICATE_DEFAULT):
-      response.set_statuscode(self.return_statuscode.pop(0))
-      response.set_content(self.return_content.pop(0))
-
-    self.saved_retrieve_url = self.url_fetch_stub._RetrieveURL
-    self.url_fetch_stub._RetrieveURL = _FakeFetch
-
-    app = webapp2.WSGIApplication([('/', main.MainHandler)])
-    self.testapp = webtest.TestApp(app)
-
-  def tearDown(self):
-    # Reset the URL stub to the original function
-    self.url_fetch_stub._RetrieveURL = self.saved_retrieve_url
-    self.testbed.deactivate()
+    super(MainTest, self).setUp()
+    self.testapp = webtest.TestApp(main.app)
+    self.SetJsonResponse('{"text": "test response"}')
 
   def testGetNotLoggedIn(self):
     response = self.testapp.get('/')
 
     self.assertEqual(302, response.status_int)
 
-  @patch.object(users, 'get_current_user')
+  @mock.patch.object(users, 'get_current_user')
   def testGetLoggedIn(self, mock_get_current_user):
     mock_get_current_user.return_value = users.User(
         email='bob@test.com', _auth_domain='gmail.com')

@@ -15,40 +15,28 @@
 # limitations under the License.
 #
 
-import json
-import os
 import unittest
+import webtest
 
 import test_env_setup
 
 # Must be done before importing any AE libraries
 test_env_setup.SetUpAppEngineSysPath()
-
-import webapp2
-import webtest
-
 from google.appengine.ext import testbed
 
 import show_tweets
 import tweets
+import web_test_base
 
-class ShowTweetsTest(unittest.TestCase):
+class ShowTweetsTest(web_test_base.WebTestBase):
   def setUp(self):
-    self.testbed = testbed.Testbed()
-    self.testbed.activate()
-    self.testbed.init_memcache_stub()
-    self.testbed.init_datastore_v3_stub()
-    self.testbed.init_user_stub()
-
+    super(ShowTweetsTest, self).setUp()
     self.testapp = webtest.TestApp(show_tweets.app)
 
-    twt = tweets.Tweet.fromJson(json.loads(
-        '{"user": {"id_str": "2", "screen_name": "bob"}, "id_str": "1"}'))
-    twt.put()
+    self.CreateTweet(1, ('bob', 2)).put()
 
     # Create a tweet with integers
-    twt = tweets.Tweet.fromJson(json.loads(
-        '{"user": {"id_str": "3", "screen_name": "alice"}, "id_str": "4"}'))
+    twt = self.CreateTweet(4, ('alice', 3))
     twt.entities.integers = [tweets.IntegerEntity(), tweets.IntegerEntity()]
     twt.put()
 
@@ -77,6 +65,12 @@ class ShowTweetsTest(unittest.TestCase):
 
   def testNumTweetsGet(self):
     response = self.testapp.get('/show_tweets?num=20')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('alice') != -1)
+    self.assertTrue(response.body.find('bob') == -1)
+
+  def testNumTweetsGet_fewerThanTotal(self):
+    response = self.testapp.get('/show_tweets?num=1&all=y')
     self.assertEqual(200, response.status_int)
     self.assertTrue(response.body.find('alice') != -1)
     self.assertTrue(response.body.find('bob') == -1)

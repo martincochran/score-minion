@@ -16,59 +16,27 @@
 #
 
 import mock
-from mock import patch
-
 import os
 import unittest
+import webtest
 
 import test_env_setup
 
 # Must be done before importing any AE libraries
 test_env_setup.SetUpAppEngineSysPath()
-
-import webapp2
-import webtest
-
-from google.appengine.api import urlfetch
-from google.appengine.api import urlfetch_stub
 from google.appengine.api import users
-from google.appengine.ext import testbed
 
 import api_admin
+import web_test_base
 
-class ApiAdminTest(unittest.TestCase):
+
+class ApiAdminTest(web_test_base.WebTestBase):
   def setUp(self):
+    super(ApiAdminTest, self).setUp()
+    self.SetJsonResponse('test response')
+    self.testapp = webtest.TestApp(api_admin.app)
 
-    self.testbed = testbed.Testbed()
-    self.testbed.activate()
-    self.testbed.init_urlfetch_stub()
-    self.testbed.init_memcache_stub()
-    self.testbed.init_datastore_v3_stub()
-    self.testbed.init_user_stub()
-    self.url_fetch_stub = self.testbed.get_stub(testbed.URLFETCH_SERVICE_NAME)
-
-    self.return_statuscode = [200]
-    self.return_content = ['test response']
-
-    # Stub out the call to fetch the URL
-    def _FakeFetch(url, payload, method, headers, request, response,
-        follow_redirects=True, deadline=urlfetch_stub._API_CALL_DEADLINE,
-        validate_certificate=urlfetch_stub._API_CALL_VALIDATE_CERTIFICATE_DEFAULT):
-      response.set_statuscode(self.return_statuscode.pop(0))
-      response.set_content(self.return_content.pop(0))
-
-    self.saved_retrieve_url = self.url_fetch_stub._RetrieveURL
-    self.url_fetch_stub._RetrieveURL = _FakeFetch
-
-    app = webapp2.WSGIApplication([('/api_admin', api_admin.ApiAdminHandler)])
-    self.testapp = webtest.TestApp(app)
-
-  def tearDown(self):
-    # Reset the URL stub to the original function
-    self.url_fetch_stub._RetrieveURL = self.saved_retrieve_url
-    self.testbed.deactivate()
-
-  @patch.object(users, 'get_current_user')
+  @mock.patch.object(users, 'get_current_user')
   def testSanityGet(self, mock_get_current_user):
     mock_get_current_user.return_value = users.User(
         email='bob@test.com', _auth_domain='gmail.com')
@@ -76,16 +44,13 @@ class ApiAdminTest(unittest.TestCase):
     response = self.testapp.get('/api_admin')
     self.assertEqual(200, response.status_int)
 
-  @patch.object(users, 'get_current_user')
+  @mock.patch.object(users, 'get_current_user')
   def testPutKey(self, mock_get_current_user):
-    app2 = webapp2.WSGIApplication([('/api_admin/put_key', api_admin.PutKeyHandler)])
-    self.testapp2 = webtest.TestApp(app2)
-
     mock_get_current_user.return_value = users.User(
         email='bob@test.com', _auth_domain='gmail.com')
 
     params = {'content': 'new key'}
-    response = self.testapp2.post('/api_admin/put_key', params)
+    response = self.testapp.post('/api_admin/put_key', params)
 
     # This re-directs back to the main handler.
     self.assertEqual(302, response.status_int)

@@ -22,25 +22,16 @@ import test_env_setup
 # Must be done before importing any AE libraries
 test_env_setup.SetUpAppEngineSysPath()
 
-import webapp2
 import webtest
 
-from google.appengine.ext import testbed
-
 import stats
+import web_test_base
 
-class StatsHandlerTest(unittest.TestCase):
+
+class StatsHandlerTest(web_test_base.WebTestBase):
   def setUp(self):
-    self.testbed = testbed.Testbed()
-    self.testbed.activate()
-    self.testbed.init_memcache_stub()
-    self.testbed.init_datastore_v3_stub()
-
+    super(StatsHandlerTest, self).setUp()
     self.testapp = webtest.TestApp(stats.app)
-
-  def tearDown(self):
-    # Reset the URL stub to the original function
-    self.testbed.deactivate()
 
   def testSanityGet(self):
     response = self.testapp.get('/stats')

@@ -15,70 +15,28 @@
 # limitations under the License.
 #
 
+import datetime
 import mock
-from mock import patch
-
 import unittest
+import webtest
 
 import test_env_setup
 
 # Must be done before importing any AE libraries
 test_env_setup.SetUpAppEngineSysPath()
-
-import webapp2
-import webtest
-
 from google.appengine.api import taskqueue
-from google.appengine.api import urlfetch
-from google.appengine.api import urlfetch_service_pb
-from google.appengine.api import urlfetch_stub
-from google.appengine.ext import testbed
-from google.appengine.runtime import apiproxy_errors
 
 import crawl_lists
-import oauth_token_manager
-import tweets
-import twitter_fetcher
+import web_test_base
 
 
-class CrawlListsTest(unittest.TestCase):
+class CrawlListsTest(web_test_base.WebTestBase):
   def setUp(self):
-    # TODO: refactor test env setup into a base test class
-    self.testbed = testbed.Testbed()
-    self.testbed.activate()
-    self.testbed.init_memcache_stub()
-    self.testbed.init_taskqueue_stub()
-    self.testbed.init_datastore_v3_stub()
-    self.testbed.init_urlfetch_stub()
-    self.testbed.init_user_stub()
-
-    self.url_fetch_stub = self.testbed.get_stub(testbed.URLFETCH_SERVICE_NAME)
-
-    self.return_statuscode = [200]
-    self.return_content = ['[{"user": {"id_str": "1234", "screen_name": "bob"}}]']
-
-    # Stub out the call to fetch the URL
-    def _FakeFetch(url, payload, method, headers, request, response,
-        follow_redirects=True, deadline=urlfetch_stub._API_CALL_DEADLINE,
-        validate_certificate=urlfetch_stub._API_CALL_VALIDATE_CERTIFICATE_DEFAULT):
-      response.set_statuscode(self.return_statuscode.pop(0))
-      response.set_content(self.return_content.pop(0))
-
-    self.saved_retrieve_url = self.url_fetch_stub._RetrieveURL
-    self.url_fetch_stub._RetrieveURL = _FakeFetch
-
-    self.taskqueue_stub = self.testbed.get_stub(testbed.TASKQUEUE_SERVICE_NAME)
-
+    super(CrawlListsTest, self).setUp()
     self.testapp = webtest.TestApp(crawl_lists.app)
 
-
-  def tearDown(self):
-    # Reset the URL stub to the original function
-    self.testbed.deactivate()
-
   def testUpdateLists(self):
-    self.return_statuscode = [200]
-    self.return_content = ['{"lists": [{"id_str": "1234"}]}']
+    self.SetJsonResponse('{"lists": [{"id_str": "1234"}]}')
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
     self.assertFalse(list_query.fetch(10))
@@ -102,8 +60,7 @@ class CrawlListsTest(unittest.TestCase):
 
   def testUpdateLists_withSavedListNoUpdate(self):
     # Return one list from the API, and store it.
-    self.return_statuscode = [200]
-    self.return_content = ['{"lists": [{"id_str": "1234"}]}']
+    self.SetJsonResponse('{"lists": [{"id_str": "1234"}]}')
     self.testapp.get('/tasks/update_lists_rate_limited')
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
@@ -112,8 +69,7 @@ class CrawlListsTest(unittest.TestCase):
     self.assertEquals(1, len(list_entries[0].list_ids))
 
     # Now call it again - the saved lists should not change
-    self.return_statuscode = [200]
-    self.return_content = ['{"lists": [{"id_str": "1234"}]}']
+    self.SetJsonResponse('{"lists": [{"id_str": "1234"}]}')
 
     response = self.testapp.get('/tasks/update_lists_rate_limited')
     self.assertEqual(200, response.status_int)
@@ -125,8 +81,7 @@ class CrawlListsTest(unittest.TestCase):
 
   def testUpdateLists_withSavedListAndUpdate(self):
     # Return one list from the API, and store it.
-    self.return_statuscode = [200]
-    self.return_content = ['{"lists": [{"id_str": "1234"}]}']
+    self.SetJsonResponse('{"lists": [{"id_str": "1234"}]}')
     self.testapp.get('/tasks/update_lists_rate_limited')
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
@@ -134,10 +89,8 @@ class CrawlListsTest(unittest.TestCase):
     self.assertEquals(1, len(list_entries))
     self.assertEquals(1, len(list_entries[0].list_ids))
 
-    # Now call it again - the saved lists should not change
-    self.return_statuscode = [200]
-    self.return_content = ['{"lists": [{"id_str": "1234"}, {"id_str": "87"}]}']
-
+    # Now call it again - the new list should be added.
+    self.SetJsonResponse('{"lists": [{"id_str": "1234"}, {"id_str": "87"}]}')
     response = self.testapp.get('/tasks/update_lists_rate_limited')
     self.assertEqual(200, response.status_int)
 
@@ -148,8 +101,7 @@ class CrawlListsTest(unittest.TestCase):
 
   def testUpdateLists_withSavedListAndUpdateWithNoElements(self):
     # Return one list from the API, and store it.
-    self.return_statuscode = [200]
-    self.return_content = ['{"lists": [{"id_str": "1234"}]}']
+    self.SetJsonResponse('{"lists": [{"id_str": "1234"}]}')
     self.testapp.get('/tasks/update_lists_rate_limited')
 
     list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
@@ -157,10 +109,8 @@ class CrawlListsTest(unittest.TestCase):
     self.assertEquals(1, len(list_entries))
     self.assertEquals(1, len(list_entries[0].list_ids))
 
-    # Now call it again - the saved lists should not change
-    self.return_statuscode = [200]
-    self.return_content = ['{"lists": []}']
-
+    # Now call it again - there should be no list
+    self.SetJsonResponse('{"lists": []}')
     response = self.testapp.get('/tasks/update_lists_rate_limited')
     self.assertEqual(200, response.status_int)
 
@@ -170,118 +120,68 @@ class CrawlListsTest(unittest.TestCase):
     self.assertEquals(0, len(list_entries[0].list_ids))
  
   def testCrawlList_allNewTweets(self):
-    fake_content = ['[%s]' % ','.join([
-        '{"user": {"id_str": "3"}, "id_str": "4", "created_at": "Wed Dec 12 21:00:24 +0000 2014"}',
-        '{"user": {"id_str": "2"}, "id_str": "1", "created_at": "Wed Dec 11 21:00:24 +0000 2014"}',
-    ])]
-    self.return_statuscode = [200]
-    self.return_content = list(fake_content)
+    now = datetime.datetime.now()
+    fake_tweets = [
+        self.CreateTweet(4, ('alice', 3), created_at=now + datetime.timedelta(1, 0, 0)),
+        self.CreateTweet(1, ('bob', 2), created_at=now)
+    ]
+    self.SetTimelineResponse(list(fake_tweets))
 
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
 
-    tweet_query = tweets.Tweet.query()
-    tweet_db = tweet_query.fetch(10)
-    self.assertEquals(2, len(tweet_db))
-    for tweet in tweet_db:
-      self.assertIn(tweet.id_str, ['1', '4'])
-      self.assertEquals(tweet.from_list, '123')
-
-    # Also check the users
-    user_query = tweets.User.query()
-    user_db = user_query.fetch(10)
-    self.assertEquals(2, len(user_db))
-    for user in user_db:
-      self.assertIn(user.id_str, ['2', '3'])
+    self.assertTweetDbContents(['1', '4'], '123')
+    self.assertUserDbContents(['2', '3'])
 
     # Now update it again - there should be no new entries
-    self.return_statuscode = [200]
-    self.return_content = list(fake_content)
-
+    self.SetTimelineResponse(list(fake_tweets))
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
-    tweet_query = tweets.Tweet.query()
-    tweet_db = tweet_query.fetch(10)
-    self.assertEquals(2, len(tweet_db))
-    for tweet in tweet_db:
-      self.assertIn(tweet.id_str, ['1', '4'])
-      self.assertEquals(tweet.from_list, '123')
 
-    # Also check the users
-    user_query = tweets.User.query()
-    user_db = user_query.fetch(10)
-    self.assertEquals(2, len(user_db))
-    for user in user_db:
-      self.assertIn(user.id_str, ['2', '3'])
+    self.assertTweetDbContents(['1', '4'], '123')
+    self.assertUserDbContents(['2', '3'])
 
   def testCrawlList_retrievalError(self):
-    self.return_statuscode = [200]
-    self.return_content = ['']
-
+    self.SetJsonResponse('')
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
     self.assertTrue(response.body.find('Could not fetch statuses') != -1)
 
   def testCrawlList_incrementalNewTweets(self):
-    self.return_statuscode = [200]
-    self.return_content = ['[%s]' % ','.join([
-        '{"user": {"id_str": "2", "screen_name": "bob"}, "id_str": "1"}',
-    ])]
+    self.SetTimelineResponse(self.CreateTweet(1, ('bob', 2)))
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
 
-    tweet_query = tweets.Tweet.query()
-    tweet_db = tweet_query.fetch(10)
-    self.assertEquals(1, len(tweet_db))
-    for tweet in tweet_db:
-      self.assertIn(tweet.id_str, ['1'])
-      self.assertEquals(tweet.from_list, '123')
+    self.assertTweetDbContents(['1'], '123')
 
     # Now update it again - there should be one new entries
-    self.return_statuscode = [200]
-    self.return_content = ['[%s]' % ','.join([
-        '{"user": {"id_str": "3", "screen_name": "alice"}, "id_str": "4"}'
-    ])]
+    self.SetTimelineResponse(self.CreateTweet(4, ('alice', 3)))
 
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
-    tweet_query = tweets.Tweet.query()
-    tweet_db = tweet_query.fetch(10)
-    self.assertEquals(2, len(tweet_db))
-    for tweet in tweet_db:
-      self.assertIn(tweet.id_str, ['1', '4'])
+    self.assertTweetDbContents(['1', '4'], '123')
 
   def testCrawlList_incrementalOldTweets(self):
-    self.return_statuscode = [200]
-    self.return_content = ['[%s]' % ','.join([
-        '{"user": {"id_str": "3"}, "id_str": "4", "created_at": "Wed Dec 10 21:00:24 +0000 2014"}'
-    ])]
+    now = datetime.datetime.now()
+    self.SetTimelineResponse(self.CreateTweet(4, ('bob', 3), created_at=now))
+
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
 
-    tweet_query = tweets.Tweet.query()
-    tweet_db = tweet_query.fetch(10)
-    self.assertEquals(1, len(tweet_db))
-    for tweet in tweet_db:
-      self.assertIn(tweet.id_str, ['4'])
+    self.assertTweetDbContents(['4'], '123')
 
     # Now update it again - there should be one new entries.  The 2nd entry is
     # too old and has too low a status ID to be indexed.  The indexer stops
     # looking at the timeline at that point.
-    self.return_statuscode = [200]
-    self.return_content = ['[%s]' % ','.join([
-        '{"user": {"id_str": "5"}, "id_str": "6", "created_at": "Wed Dec 11 21:00:24 +0000 2014"}',
-        '{"user": {"id_str": "2"}, "id_str": "1", "created_at": "Wed Dec 09 21:00:24 +0000 2014"}',
-        '{"user": {"id_str": "7"}, "id_str": "8", "created_at": "Wed Dec 12 21:00:24 +0000 2014"}'
-    ])]
+    self.SetTimelineResponse(
+        [self.CreateTweet(6, ('alice', 5), created_at=now + datetime.timedelta(1, 0, 0)),
+        self.CreateTweet(1, ('bob', 2), created_at=now - datetime.timedelta(1, 0, 0)),
+        self.CreateTweet(8, ('bob', 7), created_at=now + datetime.timedelta(2, 0, 0))])
 
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
-    tweet_query = tweets.Tweet.query()
-    tweet_db = tweet_query.fetch(10)
-    self.assertEquals(2, len(tweet_db))
-    for tweet in tweet_db:
-      self.assertIn(tweet.id_str, ['6', '4'])
+
+    self.assertTweetDbContents(['6', '4'], '123')
  
   def testCrawlList_noId(self):
     response = self.testapp.get('/tasks/crawl_list')
@@ -293,10 +193,9 @@ class CrawlListsTest(unittest.TestCase):
     self.assertEqual(200, response.status_int)
     self.assertEqual('No lists to crawl', response.body)
 
-  @patch.object(taskqueue, 'add')
+  @mock.patch.object(taskqueue, 'add')
   def testCrawlAllLists_someLists(self, mock_add_queue):
-    self.return_statuscode = [200]
-    self.return_content = ['{"lists": [{"id_str": "1234"}, {"id_str": "87"}]}']
+    self.SetJsonResponse('{"lists": [{"id_str": "1234"}, {"id_str": "87"}]}')
     self.testapp.get('/tasks/update_lists_rate_limited')
 
     response = self.testapp.get('/tasks/crawl_all_lists')
@@ -312,7 +211,7 @@ class CrawlListsTest(unittest.TestCase):
         url='/tasks/crawl_list', method='GET',
         params={'list_id': '87'}, queue_name='list-statuses'))
 
-  @patch.object(taskqueue, 'add')
+  @mock.patch.object(taskqueue, 'add')
   def testUpdateLists_cronEntryPoint(self, mock_add_queue):
     response = self.testapp.get('/tasks/update_lists')
     self.assertEqual(200, response.status_int)
@@ -323,10 +222,6 @@ class CrawlListsTest(unittest.TestCase):
     self.assertEquals(calls[0], mock.call(
         url='/tasks/update_lists_rate_limited', method='GET',
         queue_name='list-lists'))
-
-
-  def testUpdateLatestStatus(self):
-    pass
 
 
 if __name__ == '__main__':

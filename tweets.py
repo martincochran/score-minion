@@ -68,6 +68,11 @@ def ParseTweetDateString(date_str, tweet_id='', user_id=''):
   # TODO: manually parse UTC offset and perform operation on resulting DT object?
 
 
+def WriteTweetDateString(dt):
+  # TODO: Need to fix UTC offset stuff so this works.  See above TODO.
+  return '%s +0000 %s' % (dt.strftime('%a %b %d %H:%M:%S'), dt.strftime('%Y'))
+
+
 def CalculateDateType(tweet_id, user_id):
   id_value = tweet_id or user_id
   if tweet_id:
@@ -434,6 +439,20 @@ class Tweet(ndb.Model):
           tweet_text=json_obj.get('text', '')),
         original_json=json.dumps(json_obj),
         lang=json_obj.get('lang', ''))
+
+  def toJsonString(self):
+    """Write this object to json string.
+    
+    Only suitable for testing at the moment.  Not idempotent when composed with
+    calls to fromJson.
+    """
+    d = {}
+    d['user'] = {'id_str': self.author_id, 'screen_name': self.author_screen_name}
+    d['id_str'] = self.id_str
+
+    if self.created_at:
+      d['created_at'] = WriteTweetDateString(self.created_at)
+    return json.dumps(d)
 
 
 class User(ndb.Model):

@@ -16,52 +16,21 @@
 #
 
 import unittest
+import webtest
 
 import test_env_setup
 
 # Must be done before importing any AE libraries
 test_env_setup.SetUpAppEngineSysPath()
 
-import webapp2
-import webtest
-
-from google.appengine.api import urlfetch
-from google.appengine.api import urlfetch_stub
-from google.appengine.ext import testbed
-from google.appengine.ext.ndb import stats
-
 import accounts
 import tweets
+import web_test_base
 
-class AccountsTest(unittest.TestCase):
+class AccountsTest(web_test_base.WebTestBase):
   def setUp(self):
-    self.testbed = testbed.Testbed()
-    self.testbed.activate()
-    self.testbed.init_urlfetch_stub()
-    self.testbed.init_memcache_stub()
-    self.testbed.init_datastore_v3_stub()
-    self.testbed.init_user_stub()
-    self.url_fetch_stub = self.testbed.get_stub(testbed.URLFETCH_SERVICE_NAME)
-
-    self.return_statuscode = [200]
-    self.return_content = ['[{"user": {"id_str": "1234", "screen_name": "bob"}}]']
-
-    # Stub out the call to fetch the URL
-    def _FakeFetch(url, payload, method, headers, request, response,
-        follow_redirects=True, deadline=urlfetch_stub._API_CALL_DEADLINE,
-        validate_certificate=urlfetch_stub._API_CALL_VALIDATE_CERTIFICATE_DEFAULT):
-      response.set_statuscode(self.return_statuscode.pop(0))
-      response.set_content(self.return_content.pop(0))
-
-    self.saved_retrieve_url = self.url_fetch_stub._RetrieveURL
-    self.url_fetch_stub._RetrieveURL = _FakeFetch
-
+    super(AccountsTest, self).setUp()
     self.testapp = webtest.TestApp(accounts.app)
-
-  def tearDown(self):
-    # Reset the URL stub to the original function
-    self.url_fetch_stub._RetrieveURL = self.saved_retrieve_url
-    self.testbed.deactivate()
 
   def testSanityGet(self):
     self.assertEqual(200, self.testapp.get('/accounts').status_int)
@@ -134,26 +103,22 @@ class AccountsTest(unittest.TestCase):
     self.assertTrue(response.body.find('steve') == -1)
 
   def testDeleteAllTweets(self):
-    self.return_content = [
-        '[{"user": {"id_str": "1234", "screen_name": "bob"}, "id_str": "123"}]',
-    ]
+    self.SetTimelineResponse(self.CreateTweet(123, ('bob', 1234)))
 
     # First add an account
     self.testapp.post('/accounts/follow_account', {'account': 'bob'})
 
     # Ensure there is at least one tweet in the db
-    tweet_query = tweets.Tweet.query()
-    tweet_db = tweet_query.fetch(1000)
-    self.assertEquals(1, len(tweet_db))
+    self.assertTweetDbContents(['123'])
+    self.assertUserDbContents(['1234'])
 
     # Now delete it
     response = self.testapp.post('/accounts/delete_all_tweets', {})
 
     # This re-directs back to the main handler.
     self.assertEqual(302, response.status_int)
-    tweet_query = tweets.Tweet.query()
-    tweet_db = tweet_query.fetch(1000)
-    self.assertFalse(tweet_db)
+    self.assertTweetDbContents([])
+    self.assertUserDbContents(['1234'])
 
     response = self.testapp.get('/accounts')
     self.assertEqual(200, response.status_int)
@@ -174,11 +139,8 @@ class AccountsTest(unittest.TestCase):
     self.testapp.post('/accounts/follow_account', {'account': 'bob'})
     self.testapp.post('/accounts/follow_account', {'account': 'steve'})
 
-    tweet_query = tweets.Tweet.query()
-    tweet_db = tweet_query.fetch(1000)
-    self.assertEquals(2, len(tweet_db))
-    for tweet in tweet_db:
-      self.assertIn(tweet.id_str, ['123', '456'])
+    self.assertTweetDbContents(['123', '456'])
+    self.assertUserDbContents(['1234', '999'])
 
     # Now delete it
     response = self.testapp.post('/accounts/recrawl', {})
@@ -186,13 +148,8 @@ class AccountsTest(unittest.TestCase):
     # This re-directs back to the main handler.
     self.assertEqual(302, response.status_int)
 
-    tweet_query = tweets.Tweet.query()
-    tweet_db = tweet_query.fetch(1000)
-    self.assertEquals(2, len(tweet_db))
-
-    # The tweets are different
-    for tweet in tweet_db:
-      self.assertIn(tweet.id_str, ['777', '888'])
+    self.assertTweetDbContents(['777', '888'])
+    self.assertUserDbContents(['1234', '999'])
 
     response = self.testapp.get('/accounts')
     self.assertEqual(200, response.status_int)

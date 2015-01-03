@@ -1,0 +1,125 @@
+#!/usr/bin/env python
+#
+# Copyright 2015 Martin Cochran
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+import datetime
+import json
+import unittest
+
+from google.appengine.api import taskqueue
+from google.appengine.api import urlfetch
+from google.appengine.api import urlfetch_service_pb
+from google.appengine.api import urlfetch_stub
+from google.appengine.ext import testbed
+
+import tweets
+
+
+class WebTestError(Exception):
+  pass
+
+
+class WebTestBase(unittest.TestCase):
+  """Base test class for testbed tests with some common functionality."""
+  def setUp(self):
+    self.testbed = testbed.Testbed()
+    self.testbed.activate()
+    self.testbed.init_memcache_stub()
+    self.testbed.init_taskqueue_stub()
+    self.testbed.init_datastore_v3_stub()
+    self.testbed.init_urlfetch_stub()
+    self.testbed.init_user_stub()
+
+    # Stub out the request / response for the Twitter API
+    def _FakeFetch(url, payload, method, headers, request, response,
+        follow_redirects=True, deadline=urlfetch_stub._API_CALL_DEADLINE,
+        validate_certificate=urlfetch_stub._API_CALL_VALIDATE_CERTIFICATE_DEFAULT):
+      response.set_statuscode(self.return_statuscode.pop(0))
+      response.set_content(self.return_content.pop(0))
+
+    self.url_fetch_stub = self.testbed.get_stub(testbed.URLFETCH_SERVICE_NAME)
+    self.saved_retrieve_url = self.url_fetch_stub._RetrieveURL
+    self.url_fetch_stub._RetrieveURL = _FakeFetch
+    self.taskqueue_stub = self.testbed.get_stub(testbed.TASKQUEUE_SERVICE_NAME)
+
+    self.SetTimelineResponse(self.CreateTweet(1, ('bob', 1234)))
+
+
+  def tearDown(self):
+    # Reset the URL stub to the original function
+    self.url_fetch_stub._RetrieveURL = self.saved_retrieve_url
+    self.testbed.deactivate()
+
+  def SetJsonResponse(self, json_str, status_code=200):
+    """Set the json response content for twitter_fetcher."""
+    self.return_statuscode = [status_code]
+    self.return_content = [json_str]
+
+  def SetTimelineResponse(self, twts):
+    """Set a timeline response from the given tweets.Tweet objects.
+
+    Args:
+      twts: A list of tweets.Tweet objects.
+    """
+    if type(twts) == tweets.Tweet:
+      self.SetJsonResponse('[%s]' % twts.toJsonString())
+      return
+
+    if type(twts) == list:
+      self.SetJsonResponse('[%s]' % ','.join([t.toJsonString() for t in twts]))
+      return
+
+    raise WebTestError('Bad argument to SetTimelineResponse: %s', twts)
+
+  def CreateTweet(self, id_str, user_screen_name_and_id, created_at=None):
+    """Convience method to create a Tweet object with minimal required fields.
+    
+    Args:
+      id_str: id of tweet
+      user_screen_name_and_id: Pair of screen_name and id_str of user
+      created_at: datetime of when Tweet was created.
+    Returns:
+      A Tweet object with these required fields.
+    """
+    d = {}
+    d['user'] = {
+        'id_str': str(user_screen_name_and_id[1]),
+        'screen_name': user_screen_name_and_id[0]
+    }
+    d['id_str'] = str(id_str)
+    if created_at:
+      d['created_at'] = tweets.WriteTweetDateString(created_at)
+
+    # We re-use the Tweet parser because it sets all the default fields correctly.
+    return tweets.Tweet.fromJson(d)
+
+  def assertTweetDbContents(self, tweet_ids, list_id=''):
+    """Assert that all tweets in the DB are in tweet_ids."""
+    tweet_query = tweets.Tweet.query()
+    tweet_db = tweet_query.fetch(1000)
+    self.assertEquals(len(tweet_ids), len(tweet_db))
+    for tweet in tweet_db:
+      self.assertIn(tweet.id_str, tweet_ids)
+      if list_id:
+        self.assertEquals(tweet.from_list, list_id)
+
+  def assertUserDbContents(self, user_ids):
+    """Assert that all users in the DB are in user_ids."""
+    user_query = tweets.User.query()
+    user_db = user_query.fetch(1000)
+    self.assertEquals(len(user_ids), len(user_db))
+    for user in user_db:
+      self.assertIn(user.id_str, user_ids)

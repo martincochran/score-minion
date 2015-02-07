@@ -1,11 +1,11 @@
 cron:
 - description: Update set of admin-defined lists
   url: /tasks/update_lists
-  schedule: every 24 hours
+  schedule: every 7 days
 
 # Note - if there are more than 12 lists, the crawl queue will grow faster
 # than it consumes tasks.
 # TODO: probably only need to crawl during weekends for most tournaments
 - description: Crawl all admin-defined lists
   url: /tasks/crawl_all_lists
-  schedule: every 12 hours
+  schedule: every 48 hours

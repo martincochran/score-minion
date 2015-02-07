@@ -369,6 +369,10 @@ class Tweet(ndb.Model):
   # Date & time the tweet was authored
   created_at = ndb.DateTimeProperty('cd', required=True)
 
+  # TODO: move to 64-bit ints.  This will save on storage, make comparisons
+  # faster, ensure indexing is efficient, and allow easy computations that will
+  # help with the 'max_id' parameter in timelines.
+  #
   # 64-bit, unique, stable id, but Keys should use strings, not ints, to avoid
   # key collisions with keys picked by the datastore
   # See: https://cloud.google.com/appengine/docs/python/ndb/entities#numeric_keys

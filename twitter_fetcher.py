@@ -132,11 +132,13 @@ class TwitterFetcher:
     response = self._FetchResults(url, params=params)
     return response
 
-  def ListStatuses(self, list_id, count=200, include_rts=0, since_id=None):
+  def ListStatuses(self, list_id, count=200, include_rts=0, since_id=None,
+      max_id=None):
     """Returns a timeline of tweets authored by members of the given list.
 
     Rate limit: 180 / 15 minute window.
     More info: https://dev.twitter.com/rest/reference/get/lists/statuses
+    See also: https://dev.twitter.com/rest/public/timelines
 
     Args:
       list_id: The ID of the list
@@ -144,6 +146,7 @@ class TwitterFetcher:
       include_rts: If 1, include retweets as well
       since_id: (optional) If supplied, fetch only tweets more recent than that
         id.
+      max_id: (optional) If supplied, fetch only tweets older than that id.
     Returns:
       The response of the API call
     """
@@ -155,6 +158,8 @@ class TwitterFetcher:
     }
     if since_id:
       params['since_id'] = since_id
+    if max_id:
+      params['max_id'] = max_id
 
     response = self._FetchResults(url, params=params)
     return response

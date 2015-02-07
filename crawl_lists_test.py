@@ -119,7 +119,8 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertEquals(1, len(list_entries))
     self.assertEquals(0, len(list_entries[0].list_ids))
  
-  def testCrawlList_allNewTweets(self):
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlList_allNewTweets(self, mock_add_queue):
     now = datetime.datetime.now()
     fake_tweets = [
         self.CreateTweet(4, ('alice', 3), created_at=now + datetime.timedelta(1, 0, 0)),
@@ -141,6 +142,9 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertTweetDbContents(['1', '4'], '123')
     self.assertUserDbContents(['2', '3'])
 
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+
   def testCrawlList_retrievalError(self):
     self.SetJsonResponse('')
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
@@ -155,16 +159,131 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertTweetDbContents(['1'], '123')
 
     # Now update it again - there should be one new entry
-    self.SetTimelineResponse(self.CreateTweet(4, ('alice', 3)))
+    self.SetTimelineResponse([self.CreateTweet(4, ('alice', 3)),
+        self.CreateTweet(1, ('bob', 2))])
 
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
     self.assertTweetDbContents(['1', '4'], '123')
 
+  def testCrawlList_incrementalNoNewTweets(self):
+    self.SetTimelineResponse(self.CreateTweet(1, ('bob', 2)))
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+
+    self.assertTweetDbContents(['1'], '123')
+
+    # Now update it again - there should be one new entry
+    self.SetTimelineResponse([self.CreateTweet(1, ('bob', 2))])
+
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+    self.assertTweetDbContents(['1'], '123')
+
   def testCrawlList_noId(self):
     response = self.testapp.get('/tasks/crawl_list')
     self.assertEqual(200, response.status_int)
     self.assertEqual('No list name specified', response.body)
+
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlList_enqueueMore(self, mock_add_queue):
+    # Crawl one tweet with a small ID.
+    self.SetTimelineResponse(self.CreateTweet(3, ('alice', 2)))
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+    self.assertTweetDbContents(['3'], '123')
+
+    # Simulate crawling 2 more without reaching the old tweet.
+    twts = [self.CreateTweet(i, ('alice', 2)) for i in range(10, 8, -1)]
+    self.SetTimelineResponse(twts)
+    response = self.testapp.get('/tasks/crawl_list?list_id=123&num_to_crawl=2')
+    self.assertEqual(200, response.status_int)
+    self.assertTweetDbContents(['3', '10', '9'], '123')
+
+    # Make sure that another call was enqueued to crawl the rest of the
+    # timeline.
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(1, len(calls))
+    expected_params = {
+        'list_id': '123',
+        'total_crawled': 2L,
+        'max_id': 9L,
+        'since_id': 3L,
+        'num_to_crawl': 2L,
+    }
+    self.assertEquals(calls[0], mock.call(
+        url='/tasks/crawl_list', method='GET',
+        params=expected_params, queue_name='list-statuses'))
+
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlList_simulateCrawlFollowUp(self, mock_add_queue):
+    # Crawl one tweet with a small ID.
+    self.SetTimelineResponse(self.CreateTweet(3, ('alice', 2)))
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+
+    # Crawl one tweet with a recent ID which is after the ID that
+    # should be indexed.
+    self.SetTimelineResponse(self.CreateTweet(10, ('alice', 2)))
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+    self.assertTweetDbContents(['10', '3'], '123')
+
+    # This enqueued a crawling request
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(1, len(calls))
+
+    # Simulate crawling 1 more.
+    self.SetTimelineResponse([self.CreateTweet(8, ('alice', 2)),
+        self.CreateTweet(3, ('alice', 2))])
+
+    params = {
+        'list_id': '123',
+        'total_crawled': 1L,
+        'max_id': 10L,
+        'since_id': 3L,
+        'num_to_crawl': 200L,
+    }
+    response = self.testapp.get(
+        '/tasks/crawl_list?%s' % '&'.join(
+          ['%s=%s' % (i[0], i[1]) for i in params.iteritems()]))
+    self.assertEqual(200, response.status_int)
+    self.assertTweetDbContents(['10', '8', '3'], '123')
+
+    self.assertEquals(1, len(calls))
+    self.assertEquals(calls[0], mock.call(
+        url='/tasks/crawl_list', method='GET',
+        params=params, queue_name='list-statuses'))
+
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlList_simulateCrawlFollowUpEnqueueAnother(self, mock_add_queue):
+    # Crawl one tweet with a recent ID which is after the ID that
+    # should be indexed.
+    self.SetTimelineResponse(self.CreateTweet(10, ('alice', 2)))
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+    self.assertTweetDbContents(['10'], '123')
+
+    # Simulate crawling 1 more.
+    twts = [self.CreateTweet(i, ('alice', 2)) for i in range(7, 5, -1)]
+    self.SetTimelineResponse(twts)
+    params = {
+        'list_id': '123',
+        'total_crawled': 2L,
+        'max_id': 9L,
+        'since_id': 3L,
+        'num_to_crawl': 2L,
+    }
+    response = self.testapp.get(
+        '/tasks/crawl_list?%s' % '&'.join(
+          ['%s=%s' % (i[0], i[1]) for i in params.iteritems()]))
+    self.assertEqual(200, response.status_int)
+    self.assertTweetDbContents(['10', '7', '6'], '123')
+
+    # There are still more to crawl since the original tweet has not been
+    # returned in the timeline yet.
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(1, len(calls))
 
   def testCrawlAllLists_noLists(self):
     response = self.testapp.get('/tasks/crawl_all_lists')

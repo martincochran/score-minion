@@ -46,7 +46,7 @@ class ShowTweetsHandler(webapp2.RequestHandler):
     try:
       num = int(self.request.get('num'))
     except ValueError:
-      logging.warning('Could not parse num from %s', self.request.get('num'))
+      logging.debug('Could not parse num from %s', self.request.get('num'))
 
     num = min(num, 1000)
     num = max(num, 1)

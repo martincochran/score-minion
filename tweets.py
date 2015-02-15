@@ -63,8 +63,8 @@ def ParseTweetDateString(date_str, tweet_id='', user_id=''):
     return datetime.datetime.strptime('%s %s' % (date_str[:-11], date_str[-4:]),
         DATE_PARSE_FMT_STR) + td
   except ValueError:
-    logging.warning('Failed to parse date "%s" from tweet id %s',
-        date_str, tweet_id)
+    logging.warning('Failed to parse date "%s" from tweet id %s, user id %s',
+        date_str, tweet_id, user_id)
     return datetime.datetime.now()
 
 
@@ -186,6 +186,10 @@ class UserMentionEntity(ndb.Model):
   """Information about the mention of a user in a tweet."""
   user_id = ndb.StringProperty('id', required=True)
 
+  # ID property as a 64-bit signed int. This will eventually replace user_id as
+  # the main property.
+  user_id_64 = ndb.IntegerProperty('id_64')
+
   # The character positions in the tweet where this entity started and ended.
   start_idx = ndb.IntegerProperty('si')
   end_idx = ndb.IntegerProperty('ei')
@@ -195,6 +199,7 @@ class UserMentionEntity(ndb.Model):
     """Builds a UserMentionEntity object from a json object."""
     ume = UserMentionEntity()
     ume.user_id = json_obj.get('id_str', '')
+    ume.user_id_64 = json_obj.get('id', 0)
     indices = json_obj.get('indices', [])
     if len(indices) < 2:
       return ume
@@ -362,6 +367,9 @@ class Tweet(ndb.Model):
   # Author of the tweet
   author_id = ndb.StringProperty('a', required=True)
 
+  # 64-bit integer form of author ID
+  author_id_64 = ndb.IntegerProperty('a64')
+
   # Screen name of the author
   # TODO: remove.  We'll look this up on demand using memcache.
   author_screen_name = ndb.StringProperty('an', required=True)
@@ -369,10 +377,10 @@ class Tweet(ndb.Model):
   # Date & time the tweet was authored
   created_at = ndb.DateTimeProperty('cd', required=True)
 
-  # TODO: move to 64-bit ints.  This will save on storage, make comparisons
-  # faster, ensure indexing is efficient, and allow easy computations that will
-  # help with the 'max_id' parameter in timelines.
-  #
+  # ID property as a 64-bit signed int. This will eventually replace id_str as
+  # the main property.
+  id_64 = ndb.IntegerProperty()
+
   # 64-bit, unique, stable id, but Keys should use strings, not ints, to avoid
   # key collisions with keys picked by the datastore
   # See: https://cloud.google.com/appengine/docs/python/ndb/entities#numeric_keys
@@ -456,12 +464,18 @@ class Tweet(ndb.Model):
   def __BuildConstructorArgs(cls, json_obj, insert, from_list=None):
     id_str = json_obj.get('id_str', '')
     if not id_str:
-      logging.warning('could not parse tweet: %s', json_obj)
+      logging.warning('could not parse tweet, no id_str: %s', json_obj)
+      return None
+    id_64 = json_obj.get('id', 0)
+    if not id_64:
+      logging.warning('could not parse tweet, no id: %s', json_obj)
       return None
     # todo: async?
     return Tweet.__BuildObject(id_str, insert, parent=tweet_key(id_str),
         author_id=json_obj.get('user', {}).get('id_str', ''),
+        author_id_64=json_obj.get('user', {}).get('id', 0),
         author_screen_name=json_obj.get('user', {}).get('screen_name', ''),
+        id_64=id_64,
         id_str=id_str,
         created_at=ParseTweetDateString(
           json_obj.get('created_at', ''), tweet_id=id_str),
@@ -494,8 +508,13 @@ class Tweet(ndb.Model):
     calls to fromJson.
     """
     d = {}
-    d['user'] = {'id_str': self.author_id, 'screen_name': self.author_screen_name}
+    d['user'] = {
+      'id_str': self.author_id,
+      'id': self.author_id_64,
+      'screen_name': self.author_screen_name
+    }
     d['id_str'] = self.id_str
+    d['id'] = self.id_64
 
     if self.created_at:
       d['created_at'] = WriteTweetDateString(self.created_at)
@@ -511,6 +530,10 @@ class User(ndb.Model):
   # in the keyspace with auto-picked keys
   # See also: https://cloud.google.com/appengine/docs/python/ndb/entities#numeric_keys
   id_str = ndb.StringProperty('id', required=True)
+
+  # ID property as a 64-bit signed int. This will eventually replace id_str as
+  # the main property.
+  id_64 = ndb.IntegerProperty()
 
   # User-defined name
   name = ndb.StringProperty('n')  # eg, "Martin Cochran"
@@ -588,11 +611,28 @@ class User(ndb.Model):
 
   @classmethod
   def getOrInsertFromJson(cls, json_obj):
+    """Builds a User object from a json object."""
+    return cls.__BuildConstructorArgs(json_obj, True)
+
+  @classmethod
+  def fromJson(cls, json_obj):
+    """Builds a User object from a json object."""
+    return User.__BuildConstructorArgs(json_obj, False)
+
+  @classmethod
+  def __BuildConstructorArgs(cls, json_obj, insert):
     id_str = json_obj.get('id_str', '')
     if not id_str:
+      logging.warning('could not parse tweet, no id_str: %s', json_obj)
       return None
-    return User.get_or_insert(id_str, parent=user_key(id_str),
+    id_64 = json_obj.get('id', 0)
+    if not id_64:
+      logging.warning('could not parse tweet, no id: %s', json_obj)
+      return None
+    # todo: async?
+    return User.__BuildObject(id_str, insert, parent=user_key(id_str),
         id_str=id_str,
+        id_64=id_64,
         name=json_obj.get('name', ''),
         screen_name=json_obj.get('screen_name', ''),
         location=json_obj.get('location', ''),
@@ -615,30 +655,8 @@ class User(ndb.Model):
         added_by_app_version=APP_VERSION)
 
   @classmethod
-  def fromJson(cls, json_obj):
-    """Builds a User object from a json object."""
-    id_str = json_obj.get('id_str', '')
-    if not id_str:
-      return None
-    return User(id=id_str, parent=user_key(id_str),
-        id_str=id_str,
-        name=json_obj.get('name', ''),
-        screen_name=json_obj.get('screen_name', ''),
-        location=json_obj.get('location', ''),
-        description=json_obj.get('description', ''),
-        url=json_obj.get('url', ''),
-        created_at=ParseTweetDateString(
-          json_obj.get('created_at', ''), user_id=id_str),
-        protected=json_obj.get('protected', False),
-        favourites_count=json_obj.get('favourites_count', 0L),
-        utc_offset=json_obj.get('utc_offset', 0L),
-        time_zone=json_obj.get('time_zone', ''),
-        geo_enabled=json_obj.get('geo_enabled', False),
-        verified=json_obj.get('verified', False),
-        statuses_count=json_obj.get('statuses_count', 0L),
-        lang=json_obj.get('lang', ''),
-        profile_image_url_https=json_obj.get('profile_image_url_https', ''),
-        profile_banner_url_https=json_obj.get('profile_banner_url', ''),
-        followers_count=json_obj.get('followers_count', 0L),
-        friends_count=json_obj.get('friends_count', 0L),
-        added_by_app_version=APP_VERSION)
+  def __BuildObject(cls, user_id, insert, **kwargs):
+    if insert:
+      return User.get_or_insert(user_id, **kwargs)
+    else:
+      return cls(id=user_id, **kwargs)

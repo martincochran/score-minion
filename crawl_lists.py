@@ -216,13 +216,13 @@ class CrawlListHandler(webapp2.RequestHandler):
     """
     logging.debug('list_id: %s', list_id)
     logging.debug('tweet_in_db_id: %s', tweet_in_db_id)
-    logging.debug('oldest_incoming_tweet.id_str: %s', oldest_incoming_tweet.id_str)
     logging.debug('num_tweets_crawled: %s', num_tweets_crawled)
     logging.debug('num_requested: %s', num_requested)
     logging.debug('total_crawled: %s', total_crawled)
     # If no tweets were in the stream, then there are no more to crawl.
     if not oldest_incoming_tweet:
       return None
+    logging.debug('oldest_incoming_tweet.id_str: %s', oldest_incoming_tweet.id_str)
 
     # If the oldest tweet returned is the most recent on in the db, then
     # we're all caught up.

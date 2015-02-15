@@ -128,11 +128,13 @@ class AccountsTest(web_test_base.WebTestBase):
 
   def testRecrawl(self):
     self.return_statuscode = [200, 200, 200, 200]
+    bob = '"user": {"id_str": "1234", "id": 1234, "screen_name": "bob"}'
+    steve = '"user": {"id_str": "999", "id": 999, "screen_name": "steve"}'
     self.return_content = [
-        '[{"user": {"id_str": "1234", "screen_name": "bob"}, "id_str": "123"}]',
-        '[{"user": {"id_str": "999", "screen_name": "steve"}, "id_str": "456"}]',
-        '[{"user": {"id_str": "1234", "screen_name": "bob"}, "id_str": "777"}]',
-        '[{"user": {"id_str": "999", "screen_name": "steve"}, "id_str": "888"}]',
+        '[{%s, "id": 123, "id_str": "123"}]' % bob,
+        '[{%s, "id": 456, "id_str": "456"}]' % steve,
+        '[{%s, "id": 777, "id_str": "777"}]' % bob,
+        '[{%s, "id": 888, "id_str": "888"}]' % steve,
     ]
 
     # First add an account
@@ -142,7 +144,7 @@ class AccountsTest(web_test_base.WebTestBase):
     self.assertTweetDbContents(['123', '456'])
     self.assertUserDbContents(['1234', '999'])
 
-    # Now delete it
+    # Now recrawl all accounts
     response = self.testapp.post('/accounts/recrawl', {})
 
     # This re-directs back to the main handler.

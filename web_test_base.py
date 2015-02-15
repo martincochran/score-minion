@@ -17,6 +17,7 @@
 
 import datetime
 import json
+import logging
 import unittest
 
 from google.appengine.api import taskqueue
@@ -97,12 +98,15 @@ class WebTestBase(unittest.TestCase):
     d = {}
     d['user'] = {
         'id_str': str(user_screen_name_and_id[1]),
+        'id': long(user_screen_name_and_id[1]),
         'screen_name': user_screen_name_and_id[0]
     }
     d['id_str'] = str(id_str)
+    d['id'] = long(id_str)
     if created_at:
       d['created_at'] = tweets.WriteTweetDateString(created_at)
 
+    logging.debug('Created json object: %s', d)
     # We re-use the Tweet parser because it sets all the default fields correctly.
     return tweets.Tweet.fromJson(d)
 

@@ -1,7 +1,7 @@
 cron:
 - description: Update set of admin-defined lists
   url: /tasks/update_lists
-  schedule: every 7 days
+  schedule: every thursday 09:00
 
 # Note - if there are more than 12 lists, the crawl queue will grow faster
 # than it consumes tasks.

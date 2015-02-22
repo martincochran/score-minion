@@ -497,7 +497,7 @@ class Tweet(ndb.Model):
   @classmethod
   def __BuildObject(cls, tweet_id, insert, **kwargs):
     if insert:
-      return Tweet.get_or_insert(tweet_id, **kwargs)
+      return Tweet.get_or_insert('id_str', **kwargs)
     else:
       return cls(id=tweet_id, **kwargs)
 
@@ -657,6 +657,6 @@ class User(ndb.Model):
   @classmethod
   def __BuildObject(cls, user_id, insert, **kwargs):
     if insert:
-      return User.get_or_insert(user_id, **kwargs)
+      return User.get_or_insert('id_str', **kwargs)
     else:
       return cls(id=user_id, **kwargs)

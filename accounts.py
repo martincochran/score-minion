@@ -16,11 +16,13 @@
 #
 
 import logging
+import os
 
 from google.appengine.api import users
 from google.appengine.api import memcache
 from google.appengine.ext import ndb
 
+import jinja2
 import webapp2
 
 import crawl_lists
@@ -28,42 +30,21 @@ import oauth_token_manager
 import tweets
 import twitter_fetcher
 
-MAIN_PAGE_FOOTER_TEMPLATE = """\
-    <form action="/accounts/follow_account" method="post">
-      <div><textarea name="account" rows="3" cols="60"></textarea></div>
-      <div><input type="submit" value="Add account to follow"></div>
-    </form>
-    <form action="/accounts/delete_account" method="post">
-      <div><textarea name="account" rows="3" cols="60"></textarea></div>
-      <div><input type="submit" value="Name account to delete"></div>
-    </form>
-    <form action="/accounts/delete_all_accounts" method="post">
-      <div><input type="submit" value="Delete all accounts"></div>
-    </form>
-    <form action="/accounts/delete_all_tweets" method="post">
-      <div><input type="submit" value="Delete all tweets"></div>
-    </form>
-    <form action="/accounts/recrawl" method="post">
-      <div><textarea name="num_tweets" rows="3" cols="60">100</textarea></div>
-      <div><input type="submit" value="Recrawl tweets and users per team (also drops current db)"></div>
-    </form>
-    <hr>
-    <a href="%s">%s</a>
-  </body>
-</html>
-"""
+
+JINJA_ENVIRONMENT = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
+    extensions=['jinja2.ext.autoescape'],
+    autoescape=True)
+
 
 class AccountsHandler(webapp2.RequestHandler):
   def get(self):
-    self.response.write('<html><body>')
 
-    account_query = tweets.User.query().order(-tweets.User.date_added)
-    accounts = account_query.fetch(50)
+    account_query = tweets.User.query().order(tweets.User.screen_name)
+    accounts = account_query.fetch()
 
-    for user in accounts:
-      self.response.write('<b>%s</b> added at %s' % (
-            user.screen_name, user.date_added))
-      self.response.write('<p>')
+    if not accounts:
+      accounts = []
 
     if users.get_current_user():
       url = users.create_logout_url(self.request.uri)
@@ -72,8 +53,16 @@ class AccountsHandler(webapp2.RequestHandler):
       url = users.create_login_url(self.request.uri)
       url_linktext = 'Login'
 
-    # Write the submission form and the footer of the page
-    self.response.write(MAIN_PAGE_FOOTER_TEMPLATE % (url, url_linktext))
+    template_values = {
+      'accounts': accounts,
+      'num_accounts': len(accounts),
+      'url_text': url_linktext,
+      'url': url,
+    }
+ 
+    template = JINJA_ENVIRONMENT.get_template('html/accounts.html')
+    self.response.write(template.render(template_values))
+
 
 class AddAccountHandler(webapp2.RequestHandler):
   """Add a new Oauth secret to be used to fetch Twitter data."""

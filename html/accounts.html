@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+{% autoescape false %}
+<html>
+  <head>
+  <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+  </head>
+  <body>
+    Total accounts: {{ num_accounts }}
+    <table>
+      <tr>
+        <td><b>Twitter username</b></td>
+        <td><b>Date user Added to DB</b></td>
+      </tr>
+      {% for user in accounts %}
+      <tr>
+      <td>{{ user.screen_name }}</td>
+      <td>{{ user.date_added }}</td>
+      </tr>
+    {% endfor %}
+    </table>
+    <hr>
+    <form action="/accounts/follow_account" method="post">
+      <div><textarea name="account" rows="3" cols="60"></textarea></div>
+      <div><input type="submit" value="Add account to follow"></div>
+    </form>
+    <form action="/accounts/delete_account" method="post">
+      <div><textarea name="account" rows="3" cols="60"></textarea></div>
+      <div><input type="submit" value="Name account to delete"></div>
+    </form>
+    <form action="/accounts/delete_all_accounts" method="post">
+      <div><input type="submit" value="Delete all accounts"></div>
+    </form>
+    <form action="/accounts/delete_all_tweets" method="post">
+      <div><input type="submit" value="Delete all tweets"></div>
+    </form>
+    <form action="/accounts/recrawl" method="post">
+      <div><textarea name="num_tweets" rows="3" cols="60">100</textarea></div>
+      <div><input type="submit"
+      value="Recrawl tweets and users per team (also drops current db)"></div>
+    </form>
+    <a href="{{ url }}">{{ url_text }}</a>
+  </body>
+</html>
+{% endautoescape %}

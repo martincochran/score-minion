@@ -16,41 +16,31 @@
 #
 
 import cgi
+import logging
+import os
 
 from google.appengine.api import users
 
 import oauth_token_manager
 
+import jinja2
 import webapp2
 
-MAIN_PAGE_FOOTER_TEMPLATE = """\
-    <form action="/api_admin/put_key" method="post">
-      <div><textarea name="content" rows="3" cols="60"></textarea></div>
-      <div><input type="submit" value="Input OAuth key"></div>
-    </form>
-    <hr>
-    <a href="%s">%s</a>
-  </body>
-</html>
-"""
+
+JINJA_ENVIRONMENT = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
+    extensions=['jinja2.ext.autoescape'],
+    autoescape=True)
+
 
 class ApiAdminHandler(webapp2.RequestHandler):
   def get(self):
-    self.response.write('<html><body>')
-
     account_query = oauth_token_manager.ApiSecret.query(
       ancestor=oauth_token_manager.api_secret_key()).order(
       -oauth_token_manager.ApiSecret.date_added)
     accounts = account_query.fetch(10)
 
-    for account in accounts:
-      if account.author:
-        self.response.write('<b>%s</b> wrote: at %s' % (
-              account.author.nickname(), account.date_added))
-      else:
-        self.response.write('An anonymous person wrote:')
-      self.response.write('<blockquote>%s</blockquote>' %
-          cgi.escape(account.content))
+    logging.info('Loaded %s secrets', len(accounts))
 
     if users.get_current_user():
       url = users.create_logout_url(self.request.uri)
@@ -59,8 +49,14 @@ class ApiAdminHandler(webapp2.RequestHandler):
       url = users.create_login_url(self.request.uri)
       url_linktext = 'Login'
 
-    # Write the submission form and the footer of the page
-    self.response.write(MAIN_PAGE_FOOTER_TEMPLATE % (url, url_linktext))
+    template_values = {
+      'accounts': accounts,
+      'url_text': url_linktext,
+      'url': url,
+    }
+
+    template = JINJA_ENVIRONMENT.get_template('html/api_admin.html')
+    self.response.write(template.render(template_values))
 
 class PutKeyHandler(webapp2.RequestHandler):
   """Add a new Oauth secret to be used to fetch Twitter data."""

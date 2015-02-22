@@ -23,7 +23,6 @@ from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 from google.appengine.ext import ndb
 
-import jinja2
 import webapp2
 
 import oauth_token_manager

@@ -15,9 +15,18 @@
 # limitations under the License.
 #
 
+import os
+
 from google.appengine.ext.ndb import stats
 
+import jinja2
 import webapp2
+
+
+JINJA_ENVIRONMENT = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
+    extensions=['jinja2.ext.autoescape'],
+    autoescape=True)
 
 
 class StatsHandler(webapp2.RequestHandler):
@@ -28,10 +37,12 @@ class StatsHandler(webapp2.RequestHandler):
       self.response.write('No stats available')
       return
 
-    self.response.headers['Content-Type'] = 'text/text'
-    self.response.write('Total bytes stored: %d\n' % global_stat.bytes)
-    self.response.write('Total entities stored: %d' % global_stat.count)
+    template_values = {
+      'global_stats': global_stat,
+    }
  
+    template = JINJA_ENVIRONMENT.get_template('html/stats.html')
+    self.response.write(template.render(template_values))
 
 app = webapp2.WSGIApplication([
   ('/stats', StatsHandler),

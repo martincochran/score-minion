@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+{% autoescape false %}
+<html>
+  <head>
+  <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+  </head>
+  <body>
+    {% for account in accounts %}
+    {% if account.author %}
+    <b>{{ account.author }}</b>
+    {% else %}
+    An anonymous person
+    {% endif %}
+    added the following key at {{ account.date_added }}
+    <blockquote> {{ account.content }} </blockquote>
+   {% endfor %}
+    <form action="/api_admin/put_key" method="post">
+      <div><textarea name="content" rows="3" cols="60"></textarea></div>
+      <div><input type="submit" value="Input OAuth key"></div>
+    </form>
+    <hr>
+    <a href="{{ url }}">{{ url_text }}</a>
+  </body>
+</html>
+{% endautoescape %}

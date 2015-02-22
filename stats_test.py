@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 
+import mock
 import unittest
 
 import test_env_setup
@@ -22,17 +23,31 @@ import test_env_setup
 # Must be done before importing any AE libraries
 test_env_setup.SetUpAppEngineSysPath()
 
-import webtest
+from google.appengine.ext.ndb.stats import GlobalStat
 
-import stats
+import webtest
+from stats import app as stats_app
 import web_test_base
 
 
 class StatsHandlerTest(web_test_base.WebTestBase):
   def setUp(self):
     super(StatsHandlerTest, self).setUp()
-    self.testapp = webtest.TestApp(stats.app)
+    self.testapp = webtest.TestApp(stats_app)
 
-  def testSanityGet(self):
+  def testGetNoStats(self):
+    """Tests correctly handling case where no stats are returned."""
     response = self.testapp.get('/stats')
     self.assertEqual(200, response.status_int)
+
+  @mock.patch.object(GlobalStat, 'query')
+  def testBasicStats(self, mock_global_stat):
+    """Tests main case where some stats are returned."""
+    fake_response = mock.MagicMock()
+    fake_response.bytes = 5
+    fake_response.count = 10
+    mock_global_stat.return_value = fake_response
+    response = self.testapp.get('/stats')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('5') != 1)
+    self.assertTrue(response.body.find('10') != 1)

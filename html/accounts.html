@@ -10,13 +10,15 @@
       <tr>
         <td><b>Twitter username</b></td>
         <td><b>Date user Added to DB</b></td>
-        <td><b>Added by app wersion</b></td>
+        <td><b>Added by app version</b></td>
+        <td><b>Int id</b></td>
       </tr>
       {% for user in accounts %}
       <tr>
       <td>{{ user.screen_name }}</td>
       <td>{{ user.date_added }}</td>
       <td>{{ user.added_by_app_version }}</td>
+      <td>{{ user.id_64 }}</td>
       </tr>
     {% endfor %}
     </table>

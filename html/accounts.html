@@ -12,6 +12,8 @@
         <td><b>Date user Added to DB</b></td>
         <td><b>Added by app version</b></td>
         <td><b>Int id</b></td>
+        <td><b>Location</b></td>
+        <td><b>Number of followers</b></td>
       </tr>
       {% for user in accounts %}
       <tr>
@@ -19,6 +21,8 @@
       <td>{{ user.date_added }}</td>
       <td>{{ user.added_by_app_version }}</td>
       <td>{{ user.id_64 }}</td>
+      <td>{{ user.location }}</td>
+      <td>{{ user.followers_count }}</td>
       </tr>
     {% endfor %}
     </table>

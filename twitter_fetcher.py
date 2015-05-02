@@ -50,7 +50,7 @@ class TwitterFetcher:
   # TODO: change the parameter to user ids, which is stable
   STATUS_URL = '/statuses/user_timeline.json'
   FRIENDS_URL = '/friends/ids.json'
-  FOLLOWERS_URL = '/friends/ids.json'
+  FOLLOWERS_URL = '/friends/ids.json' # TODO: this can't be right
   SEARCH_URL = '/search/tweets.json'
   LOOKUP_USERS_URL = '/users/lookup.json'
   LIST_LISTS_URL = '/lists/ownerships.json'
@@ -65,6 +65,7 @@ class TwitterFetcher:
     self.secret_string = token_manager.GetSecret()
     self.bearer_token = token_manager.GetToken()
 
+  # TODO: change name to 'UserTimeline' to match the twitter API.
   def LoadTimeline(self, screen_name, count=1):
     """Fetches the last count posts from the timeline of screen_name.
 

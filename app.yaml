@@ -1,5 +1,5 @@
 application: omega-bearing-780
-version: alpha-000-021
+version: alpha-000-022
 runtime: python27
 api_version: 1
 threadsafe: no
@@ -13,19 +13,26 @@ handlers:
   static_files: favicon.ico
   upload: favicon\.ico
 
-# Public handler
+# Public handler to view tweets
 - url: /show_tweets.*
   script: show_tweets.app
+  login: admin
 
 # Admin handlers
-- url: /api_admin.*
+- url: /oauth/admin
   script: api_admin.app
+  login: admin
+
+## Oauth stuff
+- url: /oauth/playground
+  script: oauth_playground.app
   login: admin
 
 - url: /accounts.*
   script: accounts.app
   login: admin
 
+## Crawling
 - url: /tasks/crawl.*
   script: crawl_lists.app
   login: admin
@@ -34,6 +41,7 @@ handlers:
   script: crawl_lists.app
   login: admin
 
+## Stats / dashboards
 - url: /stats.*
   script: stats.app
   login: admin
@@ -41,6 +49,7 @@ handlers:
 # Main handler
 - url: .*
   script: main.app
+  login: admin
 
 libraries:
 - name: webapp2

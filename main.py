@@ -14,27 +14,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 from google.appengine.api import users
 
+import jinja2
 import webapp2
 
-import oauth_token_manager
-import twitter_fetcher
+JINJA_ENVIRONMENT = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
+    extensions=['jinja2.ext.autoescape'],
+    autoescape=True)
 
 class MainHandler(webapp2.RequestHandler):
   def get(self):
+    """Display links to all functionality."""
     # Checks for active Google account session
     user = users.get_current_user()
 
     if user:
-      self.response.headers['Content-Type'] = 'text/html'
-      self.response.write('Hello, %s\n' % user.nickname())
-      token_manager = oauth_token_manager.OauthTokenManager()
-      fetcher = twitter_fetcher.TwitterFetcher(token_manager)
-      self.response.write('Last tweet by martin_cochran: %s' % fetcher.LoadTimeline(
-        'martin_cochran', count=20))
-      self.response.write('\n<a href="%s">sign out</a>' % users.create_logout_url('/'))
+      template_values = {
+        'tweets_and_dates': [],
+        'debug': None
+      }
+      template = JINJA_ENVIRONMENT.get_template('html/main.html')
+      self.response.write(template.render(template_values))
     else:
       self.redirect(users.create_login_url(self.request.uri))
+
 
 app = webapp2.WSGIApplication([('/', MainHandler)], debug=True)

@@ -100,8 +100,8 @@ class UpdateListsRateLimitedHandler(webapp2.RequestHandler):
     existing_list = existing_list_results[0]
     old_lists = set(existing_list.list_ids)
     if new_lists == old_lists:
-      msg = 'No lists to update'
-      logging.debug(msg)
+      msg = 'No lists to update: %s' % ','.join(old_lists)
+      logging.info(msg)
       self.response.write(msg)
       return
 
@@ -110,7 +110,7 @@ class UpdateListsRateLimitedHandler(webapp2.RequestHandler):
     existing_list.put()
 
     msg = 'Updated lists for user %s: %s' % (ADMIN_USER, lists)
-    logging.debug(msg)
+    logging.info(msg)
     self.response.write(msg)
 
 

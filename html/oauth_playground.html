@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+{% autoescape false %}
+<html>
+  <head>
+  <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+  </head>
+  <body>
+    <form action="/oauth/playground" method="post">
+      Fetch params
+      <div><input type=text name="num" value={{num}}></textarea></div>
+      <div><input type=text name="screen_name" value={{account}}></textarea></div>
+      <div><input type="submit" value="Get oauth responses"></div>
+    </form>
+
+    <! TODO: table of contents to quickly go to section >
+    <div>
+    <b>LoadTimeline response:</b>
+    <br>{{ user_timeline_response }}
+    </div>
+
+    <div>
+    <b>LookupLists response:</b>
+    <br>{{ lookup_lists_response }}
+    </div>
+
+    <div>
+    <b>ListStatuses response:</b>
+    <br>{{ list_statuses_response }}
+    </div>
+  </body>
+</html>
+{% endautoescape %}

@@ -41,7 +41,7 @@ class ApiAdminTest(web_test_base.WebTestBase):
     mock_get_current_user.return_value = users.User(
         email='bob@test.com', _auth_domain='gmail.com')
 
-    response = self.testapp.get('/api_admin')
+    response = self.testapp.get(api_admin.URL_BASE)
     self.assertEqual(200, response.status_int)
 
   @mock.patch.object(users, 'get_current_user')
@@ -49,12 +49,13 @@ class ApiAdminTest(web_test_base.WebTestBase):
     mock_get_current_user.return_value = users.User(
         email='bob@test.com', _auth_domain='gmail.com')
 
+    # TODO: any way to get this URL from the page itself?
     params = {'content': 'new key'}
-    response = self.testapp.post('/api_admin/put_key', params)
+    response = self.testapp.post('%s/put_key' % api_admin.URL_BASE, params)
 
     # This re-directs back to the main handler.
     self.assertEqual(302, response.status_int)
-    response = self.testapp.get('/api_admin')
+    response = self.testapp.get(api_admin.URL_BASE)
     self.assertEqual(200, response.status_int)
 
     # Verify the new key is in the body

@@ -36,18 +36,20 @@ class MainTest(web_test_base.WebTestBase):
     self.SetJsonResponse('{"text": "test response"}')
 
   def testGetNotLoggedIn(self):
+    """Ensure non-logged in users are redirected."""
     response = self.testapp.get('/')
 
     self.assertEqual(302, response.status_int)
 
   @mock.patch.object(users, 'get_current_user')
   def testGetLoggedIn(self, mock_get_current_user):
+    """Sanity test to ensure no exceptions are thrown."""
     mock_get_current_user.return_value = users.User(
         email='bob@test.com', _auth_domain='gmail.com')
 
     response = self.testapp.get('/')
     self.assertEqual(200, response.status_int)
-    self.assertTrue(response.body.find('test response') != -1)
+    self.assertTrue(response.body.find('Test oauth') != -1)
 
 
 if __name__ == '__main__':

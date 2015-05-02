@@ -73,7 +73,7 @@ class WebTestBase(unittest.TestCase):
     """Set a timeline response from the given tweets.Tweet objects.
 
     Args:
-      twts: A list of tweets.Tweet objects.
+      twts: A single tweets.Tweet object or list of tweets.Tweet objects.
     """
     if type(twts) == tweets.Tweet:
       self.SetJsonResponse('[%s]' % twts.toJsonString())

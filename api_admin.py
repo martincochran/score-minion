@@ -26,6 +26,8 @@ import oauth_token_manager
 import jinja2
 import webapp2
 
+URL_BASE = '/oauth/admin'
+
 
 JINJA_ENVIRONMENT = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
@@ -42,17 +44,8 @@ class ApiAdminHandler(webapp2.RequestHandler):
 
     logging.info('Loaded %s secrets', len(accounts))
 
-    if users.get_current_user():
-      url = users.create_logout_url(self.request.uri)
-      url_linktext = 'Logout'
-    else:
-      url = users.create_login_url(self.request.uri)
-      url_linktext = 'Login'
-
     template_values = {
       'accounts': accounts,
-      'url_text': url_linktext,
-      'url': url,
     }
 
     template = JINJA_ENVIRONMENT.get_template('html/api_admin.html')
@@ -64,10 +57,10 @@ class PutKeyHandler(webapp2.RequestHandler):
     token_manager = oauth_token_manager.OauthTokenManager()
     token_manager.AddSecret(self.request.get('content'))
 
-    self.redirect('/api_admin')
+    self.redirect(URL_BASE)
 
 app = webapp2.WSGIApplication([
-  ('/api_admin', ApiAdminHandler),
-  ('/api_admin/', ApiAdminHandler),
-  ('/api_admin/put_key', PutKeyHandler),
+  (URL_BASE, ApiAdminHandler),
+  ('%s/' % URL_BASE, ApiAdminHandler),
+  ('%s/put_key' % URL_BASE, PutKeyHandler),
 ], debug=True)

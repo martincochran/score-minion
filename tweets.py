@@ -501,6 +501,7 @@ class Tweet(ndb.Model):
     else:
       return cls(id=tweet_id, **kwargs)
 
+  # TODO: Don't use java camel-casing.
   def toJsonString(self):
     """Write this object to json string.
     

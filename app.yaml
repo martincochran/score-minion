@@ -1,5 +1,5 @@
 application: omega-bearing-780
-version: alpha-000-024
+version: alpha-000-025
 runtime: python27
 api_version: 1
 threadsafe: no
@@ -46,6 +46,10 @@ handlers:
   script: stats.app
   login: admin
 
+## API
+- url: /_ah/spi/.*
+  script: scores_api.app
+
 # Main handler
 - url: .*
   script: main.app
@@ -56,3 +60,5 @@ libraries:
   version: "latest"
 - name: jinja2
   version: 2.6
+- name: endpoints
+  version: latest 

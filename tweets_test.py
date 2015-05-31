@@ -113,6 +113,7 @@ TWEET_JSON_LINES = [
     '"possibly_sensitive":false,',
     '"lang":"en"}']
 
+# TODO: write ToJson function and for all classes ensure obj = fromJson(obj.toJson)
 class TweetTest(unittest.TestCase):
 
   def setUp(self):

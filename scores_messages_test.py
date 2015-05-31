@@ -22,4 +22,7 @@ class ScoresMessagesTest(unittest.TestCase):
 
   def testSanityMessages(self):
     """Just verify there are no syntax errors in the protocol definitions."""
-    msg = scores_messages.GamesRequest()
+    scores_messages.GamesRequest()
+    scores_messages.GamesResponse()
+    scores_messages.GameInfoRequest()
+    scores_messages.GameInfoResponse()

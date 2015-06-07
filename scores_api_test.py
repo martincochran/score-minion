@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import unittest
 import webtest
 
@@ -36,6 +37,9 @@ def null_decorator(*args, **kwargs):
 
 endpoints.method = null_decorator
 
+# For some reason this is necessary before importing scores_api
+# and using endpoints.
+os.environ['CURRENT_VERSION_ID'] = '1.2'
 import scores_api
 import scores_messages
 import web_test_base

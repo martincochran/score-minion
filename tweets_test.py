@@ -117,7 +117,7 @@ TWEET_JSON_LINES = [
 class TweetTest(unittest.TestCase):
 
   def setUp(self):
-    """Stub out the datastore so we can test it."""
+    """Stub out the datastore."""
     self.testbed = testbed.Testbed()
     self.testbed.activate()
     self.testbed.init_memcache_stub()

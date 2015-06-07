@@ -58,34 +58,13 @@ class WebTestBase(unittest.TestCase):
 
     self.SetTimelineResponse(self.CreateTweet(1, ('bob', 1234)))
 
-
   def tearDown(self):
     # Reset the URL stub to the original function
     self.url_fetch_stub._RetrieveURL = self.saved_retrieve_url
     self.testbed.deactivate()
 
-  def SetJsonResponse(self, json_str, status_code=200):
-    """Set the json response content for twitter_fetcher."""
-    self.return_statuscode = [status_code]
-    self.return_content = [json_str]
-
-  def SetTimelineResponse(self, twts):
-    """Set a timeline response from the given tweets.Tweet objects.
-
-    Args:
-      twts: A single tweets.Tweet object or list of tweets.Tweet objects.
-    """
-    if type(twts) == tweets.Tweet:
-      self.SetJsonResponse('[%s]' % twts.toJsonString())
-      return
-
-    if type(twts) == list:
-      self.SetJsonResponse('[%s]' % ','.join([t.toJsonString() for t in twts]))
-      return
-
-    raise WebTestError('Bad argument to SetTimelineResponse: %s', twts)
-
-  def CreateTweet(self, id_str, user_screen_name_and_id, created_at=None):
+  @classmethod
+  def CreateTweet(cls, id_str, user_screen_name_and_id, created_at=None):
     """Convience method to create a Tweet object with minimal required fields.
     
     Args:
@@ -109,6 +88,27 @@ class WebTestBase(unittest.TestCase):
     logging.debug('Created json object: %s', d)
     # We re-use the Tweet parser because it sets all the default fields correctly.
     return tweets.Tweet.fromJson(d)
+
+  def SetJsonResponse(self, json_str, status_code=200):
+    """Set the json response content for twitter_fetcher."""
+    self.return_statuscode = [status_code]
+    self.return_content = [json_str]
+
+  def SetTimelineResponse(self, twts):
+    """Set a timeline response from the given tweets.Tweet objects.
+
+    Args:
+      twts: A single tweets.Tweet object or list of tweets.Tweet objects.
+    """
+    if type(twts) == tweets.Tweet:
+      self.SetJsonResponse('[%s]' % twts.toJsonString())
+      return
+
+    if type(twts) == list:
+      self.SetJsonResponse('[%s]' % ','.join([t.toJsonString() for t in twts]))
+      return
+
+    raise WebTestError('Bad argument to SetTimelineResponse: %s', twts)
 
   def assertTweetDbContents(self, tweet_ids, list_id=''):
     """Assert that all tweets in the DB are in tweet_ids."""

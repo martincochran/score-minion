@@ -28,6 +28,8 @@ class AgeBracket(messages.Enum):
   GRAND_MASTERS = 2
   U_23 = 3
   U_19 = 4
+  COLLEGE = 5
+  NO_RESTRICTION = 6
 
 
 class League(messages.Enum):
@@ -66,7 +68,7 @@ class Team(messages.Message):
   twitter_account = messages.MessageField(TwitterAccount, 1)
 
   # URL of score reporter page for that team.
-  score_reporter_url = messages.StringField(2)
+  score_reporter_id = messages.StringField(2)
 
 
 class GameSourceType(messages.Enum):
@@ -76,10 +78,10 @@ class GameSourceType(messages.Enum):
 
 class GameSource(messages.Message):
   """Source of latest model update to game."""
-  source_type = messages.EnumField(GameSourceType, 1)
+  type = messages.EnumField(GameSourceType, 1)
 
-  # Time of game update.
-  update_time_utc_sec = messages.IntegerField(2)
+  # UTC time of game update as a string output by strftime.
+  update_time_utc_str = messages.StringField(2)
 
   # URL of score reporter update, if appropriate.
   score_reporter_url = messages.StringField(3)
@@ -117,8 +119,11 @@ class Game(messages.Message):
   # League of game. eg, AUDL or USAU.
   league = messages.EnumField(League, 9)
 
+  # Age division of game.
+  age_bracket = messages.EnumField(AgeBracket, 10)
+
   # Source of most recent game update.
-  last_update_source = messages.MessageField(GameSource, 10)
+  last_update_source = messages.MessageField(GameSource, 11)
 
 
 class GamesRequest(messages.Message):

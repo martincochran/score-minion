@@ -1,0 +1,391 @@
+{
+ "kind": "discovery#restDescription",
+ "etag": "\"u_zXkMELIlX4ktyNbM2XKD4vK8E/vuC0DwDF8quLC4IYYMODZyDg6MM\"",
+ "discoveryVersion": "v1",
+ "id": "scores:v1",
+ "name": "scores",
+ "version": "v1",
+ "description": "Score Minion API",
+ "icons": {
+  "x16": "http://www.google.com/images/icons/product/search-16.gif",
+  "x32": "http://www.google.com/images/icons/product/search-32.gif"
+ },
+ "protocol": "rest",
+ "baseUrl": "https://omega-bearing-780.appspot.com/_ah/api/scores/v1/",
+ "basePath": "/_ah/api/scores/v1/",
+ "rootUrl": "https://omega-bearing-780.appspot.com/_ah/api/",
+ "servicePath": "scores/v1/",
+ "batchPath": "batch",
+ "parameters": {
+  "alt": {
+   "type": "string",
+   "description": "Data format for the response.",
+   "default": "json",
+   "enum": [
+    "json"
+   ],
+   "enumDescriptions": [
+    "Responses with Content-Type of application/json"
+   ],
+   "location": "query"
+  },
+  "fields": {
+   "type": "string",
+   "description": "Selector specifying which fields to include in a partial response.",
+   "location": "query"
+  },
+  "key": {
+   "type": "string",
+   "description": "API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.",
+   "location": "query"
+  },
+  "oauth_token": {
+   "type": "string",
+   "description": "OAuth 2.0 token for the current user.",
+   "location": "query"
+  },
+  "prettyPrint": {
+   "type": "boolean",
+   "description": "Returns response with indentations and line breaks.",
+   "default": "true",
+   "location": "query"
+  },
+  "quotaUser": {
+   "type": "string",
+   "description": "Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters. Overrides userIp if both are provided.",
+   "location": "query"
+  },
+  "userIp": {
+   "type": "string",
+   "description": "IP address of the site where the request originates. Use this if you want to enforce per-user limits.",
+   "location": "query"
+  }
+ },
+ "auth": {
+  "oauth2": {
+   "scopes": {
+    "https://www.googleapis.com/auth/userinfo.email": {
+     "description": "View your email address"
+    }
+   }
+  }
+ },
+ "schemas": {
+  "ScoresMessagesGame": {
+   "id": "ScoresMessagesGame",
+   "type": "object",
+   "description": "Information to represent a game.",
+   "properties": {
+    "age_bracket": {
+     "type": "string",
+     "enum": [
+      "COLLEGE",
+      "GRAND_MASTERS",
+      "MASTERS",
+      "NO_RESTRICTION",
+      "U_19",
+      "U_23"
+     ],
+     "enumDescriptions": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ]
+    },
+    "division": {
+     "type": "string",
+     "enum": [
+      "MIXED",
+      "OPEN",
+      "WOMENS"
+     ],
+     "enumDescriptions": [
+      "",
+      "",
+      ""
+     ]
+    },
+    "game_status": {
+     "type": "string",
+     "enum": [
+      "FINAL",
+      "IN_PROGRESS",
+      "NOT_STARTED",
+      "UNKNOWN"
+     ],
+     "enumDescriptions": [
+      "",
+      "",
+      "",
+      ""
+     ]
+    },
+    "id_str": {
+     "type": "string"
+    },
+    "last_update_source": {
+     "$ref": "ScoresMessagesGameSource",
+     "description": "Source of latest model update to game."
+    },
+    "league": {
+     "type": "string",
+     "enum": [
+      "AUDL",
+      "MLU",
+      "USAU",
+      "WFDF_CLUB",
+      "WFDF_WORLDS"
+     ],
+     "enumDescriptions": [
+      "",
+      "",
+      "",
+      "",
+      ""
+     ]
+    },
+    "name": {
+     "type": "string"
+    },
+    "scores": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "format": "int64"
+     }
+    },
+    "teams": {
+     "type": "array",
+     "description": "Message to identify a team. At least one field must be present.",
+     "items": {
+      "$ref": "ScoresMessagesTeam"
+     }
+    },
+    "tournament_id_str": {
+     "type": "string"
+    },
+    "tournament_name": {
+     "type": "string"
+    }
+   }
+  },
+  "ScoresMessagesGameInfoResponse": {
+   "id": "ScoresMessagesGameInfoResponse",
+   "type": "object",
+   "description": "Response with detailed info about a game.",
+   "properties": {
+    "score_reporter_source": {
+     "$ref": "ScoresMessagesGameSource",
+     "description": "Source of latest model update to game."
+    },
+    "twitter_sources": {
+     "type": "array",
+     "description": "Source of latest model update to game.",
+     "items": {
+      "$ref": "ScoresMessagesGameSource"
+     }
+    }
+   }
+  },
+  "ScoresMessagesGameSource": {
+   "id": "ScoresMessagesGameSource",
+   "type": "object",
+   "description": "Source of latest model update to game.",
+   "properties": {
+    "score_reporter_url": {
+     "type": "string"
+    },
+    "twitter_account": {
+     "$ref": "ScoresMessagesTwitterAccount"
+    },
+    "type": {
+     "type": "string",
+     "enum": [
+      "SCORE_REPORTER",
+      "TWITTER"
+     ],
+     "enumDescriptions": [
+      "",
+      ""
+     ]
+    },
+    "update_time_utc_str": {
+     "type": "string"
+    }
+   }
+  },
+  "ScoresMessagesGamesResponse": {
+   "id": "ScoresMessagesGamesResponse",
+   "type": "object",
+   "description": "Response for GetGames.",
+   "properties": {
+    "games": {
+     "type": "array",
+     "description": "Information to represent a game.",
+     "items": {
+      "$ref": "ScoresMessagesGame"
+     }
+    },
+    "pagination_token": {
+     "type": "string"
+    }
+   }
+  },
+  "ScoresMessagesTeam": {
+   "id": "ScoresMessagesTeam",
+   "type": "object",
+   "description": "Message to identify a team. At least one field must be present.",
+   "properties": {
+    "score_reporter_id": {
+     "type": "string"
+    },
+    "twitter_account": {
+     "$ref": "ScoresMessagesTwitterAccount"
+    }
+   }
+  },
+  "ScoresMessagesTwitterAccount": {
+   "id": "ScoresMessagesTwitterAccount",
+   "type": "object",
+   "properties": {
+    "id_str": {
+     "type": "string"
+    },
+    "profile_image_url_https": {
+     "type": "string"
+    },
+    "screen_name": {
+     "type": "string"
+    },
+    "user_defined_name": {
+     "type": "string"
+    }
+   }
+  }
+ },
+ "methods": {
+  "getGames": {
+   "id": "scores.getGames",
+   "path": "all_games",
+   "httpMethod": "GET",
+   "description": "Exposes an API endpoint to retrieve the scores of multiple games. Can be reference on dev server by using the following URL: http://localhost:8080/_ah/api/scores/v1/game Args: request: An instance of GamesRequest parsed from the API request. Returns: An instance of GamesResponse with the set of known games matching the request parameters.",
+   "parameters": {
+    "age_bracket": {
+     "type": "string",
+     "enum": [
+      "COLLEGE",
+      "GRAND_MASTERS",
+      "MASTERS",
+      "NO_RESTRICTION",
+      "U_19",
+      "U_23"
+     ],
+     "enumDescriptions": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "location": "query"
+    },
+    "count": {
+     "type": "string",
+     "format": "int64",
+     "location": "query"
+    },
+    "division": {
+     "type": "string",
+     "enum": [
+      "MIXED",
+      "OPEN",
+      "WOMENS"
+     ],
+     "enumDescriptions": [
+      "",
+      "",
+      ""
+     ],
+     "location": "query"
+    },
+    "max_game_time_start_utc_secs": {
+     "type": "string",
+     "format": "int64",
+     "location": "query"
+    },
+    "min_game_time_start_utc_secs": {
+     "type": "string",
+     "format": "int64",
+     "location": "query"
+    },
+    "pagination_token": {
+     "type": "string",
+     "location": "query"
+    },
+    "team_id.score_reporter_id": {
+     "type": "string",
+     "location": "query"
+    },
+    "team_id.twitter_account.id_str": {
+     "type": "string",
+     "location": "query"
+    },
+    "team_id.twitter_account.profile_image_url_https": {
+     "type": "string",
+     "location": "query"
+    },
+    "team_id.twitter_account.screen_name": {
+     "type": "string",
+     "location": "query"
+    },
+    "team_id.twitter_account.user_defined_name": {
+     "type": "string",
+     "location": "query"
+    },
+    "tournament_id": {
+     "type": "string",
+     "location": "query"
+    }
+   },
+   "response": {
+    "$ref": "ScoresMessagesGamesResponse"
+   },
+   "scopes": [
+    "https://www.googleapis.com/auth/userinfo.email"
+   ]
+  }
+ },
+ "resources": {
+  "game": {
+   "methods": {
+    "info": {
+     "id": "scores.game.info",
+     "path": "game",
+     "httpMethod": "GET",
+     "description": "Exposes an API endpoint to query for scores for the current user. Args: request: An instance of ScoresListRequest parsed from the API request. Returns: An instance of ScoresListResponse containing the scores for the current user returned in the query. If the API request specifies an order of WHEN (the default), the results are ordered by time from most recent to least recent. If the API request specifies an order of TEXT, the results are ordered by the string value of the scores.",
+     "parameters": {
+      "game_id_str": {
+       "type": "string",
+       "location": "query"
+      },
+      "max_num_sources": {
+       "type": "string",
+       "format": "int64",
+       "location": "query"
+      }
+     },
+     "response": {
+      "$ref": "ScoresMessagesGameInfoResponse"
+     },
+     "scopes": [
+      "https://www.googleapis.com/auth/userinfo.email"
+     ]
+    }
+   }
+  }
+ }
+}

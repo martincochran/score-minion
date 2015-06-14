@@ -1,5 +1,5 @@
 application: omega-bearing-780
-version: alpha-000-026
+version: alpha-000-027
 runtime: python27
 api_version: 1
 threadsafe: no
@@ -19,7 +19,7 @@ handlers:
   login: admin
 
 # Admin handlers
-- url: /oauth/admin
+- url: /oauth/admin.*
   script: api_admin.app
   login: admin
 

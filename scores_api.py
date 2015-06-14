@@ -19,12 +19,14 @@ import endpoints
 
 from protorpc import remote
 
+from scores_messages import Game
 from scores_messages import GameInfoRequest
 from scores_messages import GameInfoResponse
 from scores_messages import GameSource
 from scores_messages import GameSourceType
 from scores_messages import GamesRequest
 from scores_messages import GamesResponse
+from scores_messages import Team
 from scores_messages import TwitterAccount
 
 
@@ -74,6 +76,18 @@ class ScoresApi(remote.Service):
         the request parameters.
     """
     response = GamesResponse()
+    # Add a couple fake, static games for testing.
+    game1 = Game()
+    game1.teams = [Team(), Team()]
+    game1.teams[0].score_reporter_id = 'id 1'
+    game1.teams[1].score_reporter_id = 'id 2'
+    game1.scores = [5, 7]
+    game1.id_str = 'abcde123'
+    game1.name = 'Test game 1'
+    game1.tournament_id_str = 'tourney_1234'
+    game1.tournament_name = 'Test tourney'
+
+    response.games = [game1]
     return response
 
   @endpoints.method(GameInfoRequest, GameInfoResponse,

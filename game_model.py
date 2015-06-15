@@ -107,6 +107,9 @@ class GameSource(ndb.Model):
   # Twitter ID of account which contributed to this game.
   twitter_id = ndb.IntegerProperty('t_id')
 
+  # Text from the tweet.
+  tweet_text = ndb.StringProperty('tt')
+
   @classmethod
   def FromProto(cls, proto_obj):
     source = GameSource()
@@ -118,6 +121,7 @@ class GameSource(ndb.Model):
       source.update_date_time = datetime.datetime.now()
     if proto_obj.twitter_account:
       source.twitter_id = long(proto_obj.twitter_account.id_str)
+      source.tweet_text = proto_obj.tweet_text
     if proto_obj.score_reporter_url:
       source.score_reporter_url = proto_obj.score_reporter_url
     if not (source.twitter_id or source.score_reporter_url):
@@ -129,6 +133,7 @@ class GameSource(ndb.Model):
   def FromTweet(cls, twt):
     return GameSource(type=scores_messages.GameSourceType.TWITTER,
                       update_date_time=twt.created_at,
+                      tweet_text=twt.text,
                       twitter_id=twt.author_id_64)
   def ToProto(self):
     source = scores_messages.GameSource()
@@ -143,6 +148,7 @@ class GameSource(ndb.Model):
       account = scores_messages.TwitterAccount()
       account.id_str = str(self.twitter_id)
       source.twitter_account = account
+      source.tweet_text = self.tweet_text
     if self.score_reporter_url:
       source.score_reporter_url = self.score_reporter_url
     return source

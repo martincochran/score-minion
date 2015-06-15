@@ -44,6 +44,13 @@ indexes:
 
 - kind: Tweet
   properties:
+  - name: fl
+  - name: tom
+  - name: cd
+    direction: desc
+
+- kind: Tweet
+  properties:
   - name: ne
   - name: cd
     direction: desc
@@ -67,3 +74,8 @@ indexes:
     direction: desc
   - name: cd
     direction: desc
+
+- kind: User
+  properties:
+  - name: id
+  - name: sn

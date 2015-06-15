@@ -62,8 +62,11 @@ class ManagedLists(ndb.Model):
 
 class UpdateListsHandler(webapp2.RequestHandler):
   def get(self):
-    taskqueue.add(url='/tasks/update_lists_rate_limited', method='GET',
-        queue_name='list-lists')
+    url = '/tasks/update_lists_rate_limited'
+    if self.request.get('fake_data'):
+      url = '%s?fake_data=true' % url
+      logging.info('Faking the request to update lists')
+    taskqueue.add(url=url, method='GET', queue_name='list-lists')
     msg = 'Enqueued rate-limited list update.'
     logging.debug(msg)
     self.response.write(msg)
@@ -82,7 +85,8 @@ class UpdateListsRateLimitedHandler(webapp2.RequestHandler):
     fetcher = twitter_fetcher.TwitterFetcher(token_manager)
 
     try:
-      json_obj = fetcher.LookupLists(ADMIN_USER)
+      json_obj = fetcher.LookupLists(
+          ADMIN_USER, fake_data=self.request.get('fake_data'))
     except twitter_fetcher.FetchError as e:
       msg = 'Could not retrieve lists for %s' % ADMIN_USER
       logging.warning('%s: %s', msg, e)
@@ -126,7 +130,8 @@ class CrawlAllListsHandler(webapp2.RequestHandler):
     # For every list, enqueue a task to crawl that list.
     for l in admin_list_result[0].list_ids:
       taskqueue.add(url='/tasks/crawl_list', method='GET',
-          params={'list_id': l}, queue_name='list-statuses')
+          params={'list_id': l, 'fake_data': self.request.get('fake_data')},
+          queue_name='list-statuses')
 
     msg = 'Enqueued crawl requests for lists %s' % admin_list_result[0].list_ids
     logging.debug(msg)
@@ -164,7 +169,8 @@ class CrawlListHandler(webapp2.RequestHandler):
 
     try:
       json_obj = fetcher.ListStatuses(list_id, count=num_to_crawl,
-          since_id=last_tweet_id, max_id=max_id)
+          since_id=last_tweet_id, max_id=max_id,
+          fake_data=self.request.get('fake_data'))
     except twitter_fetcher.FetchError as e:
       msg = 'Could not fetch statuses for list %s' % list_id
       logging.warning('%s: %s', msg, e)

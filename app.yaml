@@ -1,5 +1,5 @@
 application: omega-bearing-780
-version: alpha-000-027
+version: alpha-000-028
 runtime: python27
 api_version: 1
 threadsafe: no
@@ -8,6 +8,10 @@ handlers:
 # Static files
 - url: /stylesheets
   static_dir: stylesheets
+
+- url: /testdata
+  static_dir: testdata
+  application_readable: true
 
 - url: /favicon\.ico
   static_files: favicon.ico

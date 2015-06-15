@@ -89,6 +89,9 @@ class GameSource(messages.Message):
   # Twitter account info if from a tweet update.
   twitter_account = messages.MessageField(TwitterAccount, 4)
 
+  # Text from the tweet.
+  tweet_text = messages.StringField(5)
+
 
 class Game(messages.Message):
   """Information to represent a game."""
@@ -154,6 +157,9 @@ class GamesRequest(messages.Message):
 
   # Team. If specified, return only games for this team.
   team_id = messages.MessageField(Team, 8)
+
+  # League of game. eg, AUDL or USAU.
+  league = messages.EnumField(League, 9)
 
 
 class GamesResponse(messages.Message):

@@ -118,7 +118,16 @@ class CrawlListsTest(web_test_base.WebTestBase):
     list_entries = list_query.fetch(10)
     self.assertEquals(1, len(list_entries))
     self.assertEquals(0, len(list_entries[0].list_ids))
- 
+
+  def testUpdateLists_withFakeData(self):
+    """Ensure using fake data from a test file works."""
+    self.testapp.get('/tasks/update_lists_rate_limited?fake_data=true')
+
+    list_query = crawl_lists.ManagedLists.query(ancestor=crawl_lists.lists_key())
+    list_entries = list_query.fetch(10)
+    self.assertEquals(1, len(list_entries))
+    self.assertEquals(7, len(list_entries[0].list_ids))
+    
   @mock.patch.object(taskqueue, 'add')
   def testCrawlList_allNewTweets(self, mock_add_queue):
     now = datetime.datetime.now()
@@ -150,6 +159,41 @@ class CrawlListsTest(web_test_base.WebTestBase):
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
     self.assertTrue(response.body.find('Could not fetch statuses') != -1)
+
+  def testCrawlList_fakeData(self):
+    """Verify crawling fake data for the fake list works properly."""
+
+    # List ids to ensure test does not take too long to run.
+    list_ids = []
+    list_sizes = []
+
+    # Real list ids and sizes. Uncomment this and run if these ever change.
+    #list_ids = ['186732484', '186732631', '186814318', '186814882',
+        #'186815046', '186926608', '186926651']
+    #list_sizes = [62, 71, 64, 67, 83, 87, 90]
+
+    # To add another JSON file that is the string output of a json object
+    # printed in the oauth_playground, save the output and then transform it
+    # in the following way:
+    #
+    # quote or delete " chars first
+    # \U -> (nothing)
+    # \u -> (nothing)
+    # None -> null
+    # True -> true
+    # False -> false
+    # u' -> ', but special-case each time u' occurs since a simple substitution
+    #   will convert you're into yo"re.
+    total_list_size = 0
+    list_index = 0
+    for list_id in list_ids:
+      response = self.testapp.get(
+          '/tasks/crawl_list?list_id=%s&fake_data=true' % list_id)
+      self.assertEqual(200, response.status_int)
+      total_list_size += list_sizes[list_index]
+      list_index += 1
+      self.assertTweetDbSize(total_list_size)
+
 
   def testCrawlList_incrementalNewTweets(self):
     self.SetTimelineResponse(self.CreateTweet(1, ('bob', 2)))
@@ -303,10 +347,11 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertEquals(2, len(calls))
     self.assertEquals(calls[0], mock.call(
         url='/tasks/crawl_list', method='GET',
-        params={'list_id': '1234'}, queue_name='list-statuses'))
+        params={'list_id': '1234', 'fake_data': ''},
+        queue_name='list-statuses'))
     self.assertEquals(calls[1], mock.call(
         url='/tasks/crawl_list', method='GET',
-        params={'list_id': '87'}, queue_name='list-statuses'))
+        params={'list_id': '87', 'fake_data': ''}, queue_name='list-statuses'))
 
   @mock.patch.object(taskqueue, 'add')
   def testUpdateLists_cronEntryPoint(self, mock_add_queue):

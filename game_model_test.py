@@ -19,6 +19,11 @@ import json
 import unittest
 import uuid
 
+import test_env_setup
+
+# Must be done before importing any AE libraries
+test_env_setup.SetUpAppEngineSysPath()
+
 import game_model
 import scores_messages
 import tweets
@@ -38,6 +43,8 @@ class GameModelTest(unittest.TestCase):
     """Verify serialization between Game protobuf and ndb classes."""
     game = scores_messages.Game()
     game.id_str = str(uuid.uuid4())
+    game.division = scores_messages.Division.WOMENS
+    game.league = scores_messages.League.WFDF_CLUB
     game.last_update_source = scores_messages.GameSource()
     game.last_update_source.update_time_utc_str = 'Wed Dec 10 21:00:24 2014'
     game.last_update_source.score_reporter_url = 'http://a.b.c/'

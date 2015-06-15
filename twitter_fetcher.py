@@ -17,6 +17,7 @@
 
 import json
 import logging
+import urlparse
 
 from google.appengine.api import urlfetch
 
@@ -118,7 +119,7 @@ class TwitterFetcher:
     """
     pass
 
-  def LookupLists(self, screen_name, count=50):
+  def LookupLists(self, screen_name, count=50, fake_data=False):
     """List the lists owned by a given user.
 
     Rate limit: 15 / 15 minute window.
@@ -130,11 +131,11 @@ class TwitterFetcher:
       'screen_name': screen_name,
     }
 
-    response = self._FetchResults(url, params=params)
+    response = self._FetchResults(url, params=params, fake_data=fake_data)
     return response
 
   def ListStatuses(self, list_id, count=200, include_rts=0, since_id=None,
-      max_id=None):
+      max_id=None, fake_data=False):
     """Returns a timeline of tweets authored by members of the given list.
 
     Rate limit: 180 / 15 minute window.
@@ -148,6 +149,7 @@ class TwitterFetcher:
       since_id: (optional) If supplied, fetch only tweets more recent than that
         id.
       max_id: (optional) If supplied, fetch only tweets older than that id.
+      fake_data: If True, return fake data from a static file on disk.
     Returns:
       The response of the API call
     """
@@ -162,7 +164,7 @@ class TwitterFetcher:
     if max_id:
       params['max_id'] = max_id
 
-    response = self._FetchResults(url, params=params)
+    response = self._FetchResults(url, params=params, fake_data=fake_data)
     return response
 
   def ListMemberships(self):
@@ -197,7 +199,7 @@ class TwitterFetcher:
     """
     pass
 
-  def _FetchResults(self, url, params={}):
+  def _FetchResults(self, url, params={}, fake_data=False):
     """Tries to fetch and return the parsed json results from the API.
 
     On a successful invocation the parsed, non-empty json object will be
@@ -207,6 +209,7 @@ class TwitterFetcher:
     Args:
       url: (string) URL to fetch
       params: Dictionary of parameter to add to get requests
+      fake_data: If True, return fake data from a static file on disk.
     Returns:
       The parsed json from the content of the response to the Http.request() method.
     Throws:
@@ -218,21 +221,24 @@ class TwitterFetcher:
     if param_str:
       url = '%s?%s' % (url, param_str)
 
-    try:
-      response = urlfetch.fetch(url, headers=self._BuildHeaders())
-
-      # Check to see if we need to re-authenticate to get a new token.
-      if self._ShouldReAuthenticate(response):
-        self._ReAuthenticate()
-        # Try again, once.
+    if fake_data:
+      response = self._LoadFakeResponse(url)
+    else:
+      try:
         response = urlfetch.fetch(url, headers=self._BuildHeaders())
-    except urlfetch.Error as e:
-      logging.warning('Could not fetch URL %s: %s', url, e)
-      raise FetchError(e)
 
-    if response.status_code != 200:
-      raise FetchError('Response code not 200: %s, %s' % (response.status_code,
-          response.content))
+        # Check to see if we need to re-authenticate to get a new token.
+        if self._ShouldReAuthenticate(response):
+          self._ReAuthenticate()
+          # Try again, once.
+          response = urlfetch.fetch(url, headers=self._BuildHeaders())
+      except urlfetch.Error as e:
+        logging.warning('Could not fetch URL %s: %s', url, e)
+        raise FetchError(e)
+
+      if response.status_code != 200:
+        raise FetchError('Response code not 200: %s, %s' % (response.status_code,
+            response.content))
 
     try:
       json_obj = json.loads(response.content)
@@ -246,6 +252,51 @@ class TwitterFetcher:
 
   def _BuildHeaders(self):
     return {'Authorization': 'Bearer %s' % self.bearer_token}
+
+  def _LoadFakeResponse(self, url):
+    """Read and return the fake data for a given URL.
+
+    Currently only fake responses for ListStatuses and LookupLists URLs are
+    supported.
+    
+    Params:
+      url: The URL for which fake data should be returned.
+    Returns:
+      A JSON string similar to one that would be returned on an HTTP fetch for
+      the given URL.
+    """
+    logging.info('Faking the URL fetch for %s', url)
+    class FakeResponse:
+      pass
+
+    response = FakeResponse()
+    with open(self._GetFakeFilename(url), 'r') as f:
+      response.content = f.read()
+    return response
+
+  def _GetFakeFilename(self, url):
+    """Returns the fake filename for a given URL requests.
+
+    Params:
+      url: URL request.
+    Returns:
+      The filename of the testdata file which contains the fake response for
+      that URL if it exists, or '/dev/null' if no such file exists.
+    """
+    logging.info('url %s', url)
+    url_parts = urlparse.urlparse(url)
+    logging.info('parsed url %s', url_parts)
+    if url_parts.path.find('ownership') != -1:
+      return 'testdata/lookup_lists.json'
+    if url_parts.path.find('statuses') != -1:
+      parsed_params = urlparse.parse_qsl(url_parts.query)
+      logging.info('parsed params %s', parsed_params)
+      for param in parsed_params:
+        logging.info('param %s', param)
+        if param[0] == 'list_id':
+          logging.info('Crawling list %s', param[1])
+          return 'testdata/list_statuses/%s.json' % param[1]
+    return '/dev/null'
 
   def _ShouldReAuthenticate(self, response):
     """Determines if a re-authentication is necessary given an API response."""

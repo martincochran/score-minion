@@ -447,6 +447,8 @@ class Tweet(ndb.Model):
   # The list ID if this tweet was indexed by getting statuses from a list.
   from_list = ndb.StringProperty('fl')
 
+  # TODO: add an integer 'from_list" which is stored more efficiently
+
   # Keep track of which version added this data
   added_by_app_version = ndb.StringProperty('ver', required=True)
 

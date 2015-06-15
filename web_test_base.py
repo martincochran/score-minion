@@ -120,6 +120,11 @@ class WebTestBase(unittest.TestCase):
       if list_id:
         self.assertEquals(tweet.from_list, list_id)
 
+  def assertTweetDbSize(self, expected_size):
+    tweet_query = tweets.Tweet.query()
+    tweet_db = tweet_query.fetch(1000)
+    self.assertEquals(expected_size, len(tweet_db))
+
   def assertUserDbContents(self, user_ids):
     """Assert that all users in the DB are in user_ids."""
     user_query = tweets.User.query()

@@ -16,24 +16,61 @@
 
 
 import endpoints
+import logging
+import math
+import uuid
 
 from protorpc import remote
 
+from scores_messages import AgeBracket
+from scores_messages import Division
 from scores_messages import Game
 from scores_messages import GameInfoRequest
 from scores_messages import GameInfoResponse
 from scores_messages import GameSource
 from scores_messages import GameSourceType
+from scores_messages import GameStatus
 from scores_messages import GamesRequest
 from scores_messages import GamesResponse
+from scores_messages import League
 from scores_messages import Team
 from scores_messages import TwitterAccount
+
+import tweets
 
 
 # Client ID for testing
 WEB_CLIENT_ID = '245407672402-oisb05fsubs9l96jfdfhn4tnmju4efqe.apps.googleusercontent.com'
 
 # TODO: add Android client ID
+
+# Simple data structure to lookup lists if the league, division, and age
+# bracket were specified in the request.
+LIST_ID_MAP = {
+    League.USAU: {
+      Division.OPEN: {
+        AgeBracket.COLLEGE: '186814318',
+        AgeBracket.NO_RESTRICTION: '186732484',
+      },
+      Division.WOMENS: {
+        AgeBracket.COLLEGE: '186814882',
+        AgeBracket.NO_RESTRICTION: '186732631',
+      },
+      Division.MIXED: {
+        AgeBracket.NO_RESTRICTION: '186815046',
+      },
+    },
+    League.AUDL: {
+      Division.OPEN: {
+        AgeBracket.NO_RESTRICTION: '186926608',
+      },
+    },
+    League.MLU: {
+      Division.OPEN: {
+        AgeBracket.NO_RESTRICTION: '186926651',
+      },
+    },
+}
 
 
 
@@ -45,22 +82,80 @@ class ScoresApi(remote.Service):
   """Class which defines Score Minion API v1."""
 
   @staticmethod
-  def add_move_to_board(board_state):
-    """Adds a random 'O' to a tictactoe board.
+  def _LookupMatchingTweets(request, num=100):
+    """Returns a set of tweets from the DB matching the request criteria.
+
     Args:
-        board_state: String; contains only '-', 'X', and 'O' characters.
+      request: GamesRequest object specifying what games to look up
+      num: Number of tweets to retrieve from the DB
+
     Returns:
-        A new board with one of the '-' characters converted into an 'O';
-        this simulates an artificial intelligence making a move.
+      The list of Tweet objects that match the criteria.
     """
-    result = list(board_state)  # Need a mutable object
+    # Currently the only request filter is by division.
+    # TODO: support other filters (by tournament, eg) and relax requirement
+    # that division, league, and age must be specified.
+    list_id = ScoresApi._LookupListFromDivisionAgeAndLeague(
+        request.division, request.age_bracket, request.league)
+    logging.info('Found list id %s from request %s', list_id, request)
 
-#    free_indices = [match.start()
-#                    for match in re.finditer('-', board_state)]
-#    random_index = random.choice(free_indices)
-#    result[random_index] = 'O'
+    tweet_query = tweets.Tweet.query().order(-tweets.Tweet.created_at)
+    tweet_query = tweet_query.filter(tweets.Tweet.two_or_more_integers == True)
+    tweet_query = tweet_query.filter(tweets.Tweet.from_list == list_id)
 
-    return ''.join(result)
+    return tweet_query.fetch(num)
+
+  @staticmethod
+  def _LookupListFromDivisionAgeAndLeague(division, age_bracket, league):
+    """Looks up the list_id which corresponds to the given division and league.
+
+    Args:
+      division: Division of interest
+      league: League of interest
+
+    Returns:
+      The list id corresponding to that league and division, or '' if no such
+      list exists.
+    """
+    d = LIST_ID_MAP.get(league, {})
+    if not d:
+      return ''
+    d = d.get(division, {})
+    if not d:
+      return ''
+    return d.get(age_bracket, '')
+
+  @staticmethod
+  def _FindScoreIndicies(integer_entities, tweet_text):
+    """Return the two integer entities referring to the score.
+
+    Args:
+      integer_entities: a list of tweets.IntegerEntity objects.
+      tweet_text: Tweet text for logging purposes.
+
+    Returns:
+      The indicies of the objects referring to the scores, or an empty list if
+      there are no suitable indicies.
+    """
+    for i in range(len(integer_entities) - 1):
+      entA = integer_entities[i]
+      entB = integer_entities[i+1]
+      # For now, be very restrictive: only two integers who are close to one
+      # another.
+      if math.fabs(entA.end_idx - entB.start_idx) > 4.0:
+        logging.info('Integers too far apart: %s', tweet_text)
+        continue
+      # The score can't be too high. Some AUDL / MLU games might go to 
+      # high scores if there are multiple overtimes.
+      if entA.num + entB.num > 100:
+        logging.info('Numbers sum to too high of a number: %s', tweet_text)
+        continue
+      if tweet_text[entA.end_idx:entB.start_idx].find('-') != -1:
+        return [i, i+1]
+      logging.info('Could not find "-" in tweet text: %s', tweet_text)
+    # TODO: need to do something more sophisticated for this days with multiple
+    # games.
+    return []
 
   @endpoints.method(GamesRequest, GamesResponse,
                     path='all_games', http_method='GET')
@@ -75,19 +170,72 @@ class ScoresApi(remote.Service):
         An instance of GamesResponse with the set of known games matching
         the request parameters.
     """
-    response = GamesResponse()
-    # Add a couple fake, static games for testing.
-    game1 = Game()
-    game1.teams = [Team(), Team()]
-    game1.teams[0].score_reporter_id = 'id 1'
-    game1.teams[1].score_reporter_id = 'id 2'
-    game1.scores = [5, 7]
-    game1.id_str = 'abcde123'
-    game1.name = 'Test game 1'
-    game1.tournament_id_str = 'tourney_1234'
-    game1.tournament_name = 'Test tourney'
+    # TODO: if no division, league, or age_bracket specified, throw an error.
+    twts = self._LookupMatchingTweets(request)
+    logging.info('Found %d potentially matching tweets', len(twts))
 
-    response.games = [game1]
+    response = GamesResponse()
+
+    response.games = []
+
+    teams_accounted_for = set()
+
+    for twt in twts:
+      score_indicies = ScoresApi._FindScoreIndicies(
+          twt.entities.integers, twt.text)
+
+      if not score_indicies:
+        logging.info('Ignoring tweet: %s', twt.text)
+        continue
+      else:
+        logging.info('Found suitable score in tweet: %s', twt.text)
+
+      if twt.author_id_64 in teams_accounted_for:
+        logging.info('Discarding tweet as part of another game: %s', twt.text)
+        continue
+
+      game = Game()
+      game.teams = [Team(), Team()]
+      account = TwitterAccount()
+      account.screen_name = twt.author_screen_name
+      account.id_str = twt.author_id
+      teams_accounted_for.add(twt.author_id_64)
+
+      # TODO: lookup user name and profile image URL using memcache
+      account_query = tweets.User.query().order(tweets.User.screen_name)
+      account_query = account_query.filter(tweets.User.id_str == twt.author_id)
+      user = account_query.fetch(1)
+      if user:
+        user = user[0]
+        account.user_defined_name = user.name
+        account.profile_image_url_https = user.profile_image_url_https
+      else:
+        logging.info('Could not look up user for id %s', twt.author_id)
+
+      game.teams[0].twitter_account = account
+      game.teams[1].score_reporter_id = 'unknown id'
+      game.scores = [twt.entities.integers[score_indicies[0]].num,
+          twt.entities.integers[score_indicies[1]].num]
+      game.id_str = 'game_%s' % str(uuid.uuid4())
+      game.name = ''
+      game.tournament_id_str = 'tourney_%s' % str(uuid.uuid4())
+      game.tournament_name = 'Unknown tournament'
+      game.league = request.league
+      game.division = request.division
+      game.age_bracket = request.age_bracket
+      game.game_status = GameStatus.UNKNOWN
+      source = GameSource()
+      source.type = GameSourceType.TWITTER
+      source.update_time_utc_str = twt.created_at.strftime(
+          tweets.DATE_PARSE_FMT_STR)
+      source.twitter_account = TwitterAccount()
+      source.twitter_account.screen_name = twt.author_screen_name
+      source.twitter_account.id_str = twt.id_str
+      source.tweet_text = twt.text 
+      game.last_update_source = source
+
+      response.games.append(game)
+
     return response
 
   @endpoints.method(GameInfoRequest, GameInfoResponse,

@@ -19,9 +19,6 @@ import unittest
 
 import test_env_setup
 
-# Must be done before importing any AE libraries
-test_env_setup.SetUpAppEngineSysPath()
-
 from google.appengine.ext import testbed
 
 import oauth_token_manager

@@ -21,9 +21,6 @@ import uuid
 
 import test_env_setup
 
-# Must be done before importing any AE libraries
-test_env_setup.SetUpAppEngineSysPath()
-
 import game_model
 import scores_messages
 import tweets

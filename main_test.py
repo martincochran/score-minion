@@ -21,8 +21,6 @@ import webtest
 
 import test_env_setup
 
-# Must be done before importing any AE libraries
-test_env_setup.SetUpAppEngineSysPath()
 from google.appengine.api import users
 
 import main

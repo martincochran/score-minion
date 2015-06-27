@@ -15,12 +15,16 @@
 # limitations under the License.
 
 
+import datetime
 import endpoints
 import logging
 import math
 import uuid
 
 from protorpc import remote
+
+from google.appengine.api import app_identity
+from google.appengine.api import taskqueue
 
 from scores_messages import AgeBracket
 from scores_messages import Division
@@ -38,6 +42,7 @@ from scores_messages import TwitterAccount
 
 import tweets
 
+MAX_HOURS_CRAWL_LATENCY = 1
 
 # Client ID for testing
 WEB_CLIENT_ID = '245407672402-oisb05fsubs9l96jfdfhn4tnmju4efqe.apps.googleusercontent.com'
@@ -73,7 +78,6 @@ LIST_ID_MAP = {
 }
 
 
-
 @endpoints.api(name='scores', version='v1',
                description='Score Minion API')
                #allowed_client_ids=[WEB_CLIENT_ID, endpoints.API_EXPLORER_CLIENT_ID])
@@ -97,6 +101,10 @@ class ScoresApi(remote.Service):
     # that division, league, and age must be specified.
     list_id = ScoresApi._LookupListFromDivisionAgeAndLeague(
         request.division, request.age_bracket, request.league)
+    if not list_id:
+      logging.info('No list id found from GamesRequest')
+      return []
+
     logging.info('Found list id %s from request %s', list_id, request)
 
     tweet_query = tweets.Tweet.query().order(-tweets.Tweet.created_at)
@@ -157,6 +165,28 @@ class ScoresApi(remote.Service):
     # games.
     return []
 
+  @staticmethod
+  def _PossiblyEnqueueCrawling():
+    """Trigger a crawl if that hasn't been done in a while."""
+    host = app_identity.app_identity.get_default_version_hostname()
+    if not host or host.find('localhost') != -1:
+      logging.info('Local dev/test environment detected - Not enqueuing crawl')
+      return
+    
+    # Get the most recent tweet and compare it to UTC now
+    now = datetime.datetime.now()
+    twts = tweets.Tweet.query().order(-tweets.Tweet.created_at).fetch(1)
+
+    if len(twts) and now - twts[0].created_at < datetime.timedelta(
+        hours=MAX_HOURS_CRAWL_LATENCY):
+      logging.debug('Not triggering crawl: time of last crawled tweet %s',
+          twts[0].created_at)
+      return
+
+    logging.info('Database stale - triggering crawl')
+    taskqueue.add(url='/tasks/crawl_all_lists', method='GET',
+        params={'fake_data': 'false'}, queue_name='list-statuses')
+
   @endpoints.method(GamesRequest, GamesResponse,
                     path='all_games', http_method='GET')
   def GetGames(self, request):
@@ -170,6 +200,8 @@ class ScoresApi(remote.Service):
         An instance of GamesResponse with the set of known games matching
         the request parameters.
     """
+    # If the lists haven't been crawled in a while, crawl them.
+    self._PossiblyEnqueueCrawling()
     # TODO: if no division, league, or age_bracket specified, throw an error.
     twts = self._LookupMatchingTweets(request)
     logging.info('Found %d potentially matching tweets', len(twts))

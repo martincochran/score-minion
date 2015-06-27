@@ -14,14 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
+import mock
 import os
 import unittest
 import webtest
 
 import test_env_setup
 
-# Must be done before importing any AE libraries
-test_env_setup.SetUpAppEngineSysPath()
+from google.appengine.api import app_identity
+from google.appengine.api import taskqueue
 from google.appengine.ext import testbed
 
 import endpoints
@@ -49,6 +51,9 @@ class ScoresApiTest(web_test_base.WebTestBase):
     super(ScoresApiTest, self).setUp()
     self.testbed = testbed.Testbed()
     self.testbed.activate()
+    self.testbed.init_memcache_stub()
+    self.testbed.init_taskqueue_stub()
+    self.testbed.init_datastore_v3_stub()
     self.api = scores_api.ScoresApi()
 
     self.testapp = webtest.TestApp(scores_api.app)
@@ -62,6 +67,58 @@ class ScoresApiTest(web_test_base.WebTestBase):
     """Ensure no exceptions are thrown on simple requests to GetGameInfo."""
     self.assertEqual(scores_messages.GameInfoResponse(),
         self.api.GetGameInfo(scores_messages.GameInfoRequest()))
+
+  @mock.patch.object(app_identity, 'app_identity')
+  @mock.patch.object(taskqueue, 'add')
+  def testGetGames_noTriggerCrawl(self, mock_add_queue, mock_app_identity):
+    """Ensure crawl is not triggered if the datebase is up-to-date."""
+    # Add a tweet to the database that was recently crawled.
+    twt = self.CreateTweet('2', ['bob', '5'])
+    twt.put()
+
+    mock_app_identity.get_default_version_hostname = mock.MagicMock()
+    mock_app_identity.get_default_version_hostname.return_value = 'production host'
+
+    self.assertEqual(scores_messages.GamesResponse(),
+        self.api.GetGames(scores_messages.GamesRequest()))
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+
+  @mock.patch.object(app_identity, 'app_identity')
+  @mock.patch.object(taskqueue, 'add')
+  def testGetGames_triggerCrawl(self, mock_add_queue, mock_app_identity):
+    """Ensure crawl is triggered if the database is stale."""
+    # Add a tweet to the database that was crawled yesterday.
+    yesterday_date = datetime.datetime.now() - datetime.timedelta(days=1)
+
+    # Subtract the delta that's used in the API logic.
+    yesterday_date = yesterday_date - datetime.timedelta(
+        hours=scores_api.MAX_HOURS_CRAWL_LATENCY)
+    twt = self.CreateTweet('2', ['bob', '5'], created_at=yesterday_date)
+    twt.put()
+
+    mock_app_identity.get_default_version_hostname = mock.MagicMock()
+    mock_app_identity.get_default_version_hostname.return_value = 'production host'
+
+    self.assertEqual(scores_messages.GamesResponse(),
+        self.api.GetGames(scores_messages.GamesRequest()))
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(1, len(calls))
+
+  @mock.patch.object(app_identity, 'app_identity')
+  @mock.patch.object(taskqueue, 'add')
+  def testGetGames_noTweetstriggerCrawl(self, mock_add_queue, mock_app_identity):
+    """Ensure crawl is triggered when there are no tweets."""
+    mock_app_identity.get_default_version_hostname = mock.MagicMock()
+    mock_app_identity.get_default_version_hostname.return_value = 'production host'
+
+    self.assertEqual(scores_messages.GamesResponse(),
+        self.api.GetGames(scores_messages.GamesRequest()))
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(1, len(calls))
 
 
 if __name__ == '__main__':

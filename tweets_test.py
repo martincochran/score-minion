@@ -21,8 +21,6 @@ import unittest
 
 import test_env_setup
 
-test_env_setup.SetUpAppEngineSysPath()
-
 from google.appengine.ext import testbed
 from google.appengine.ext import ndb
 

@@ -20,9 +20,6 @@ import webtest
 
 import test_env_setup
 
-# Must be done before importing any AE libraries
-test_env_setup.SetUpAppEngineSysPath()
-
 import accounts
 import tweets
 import web_test_base

@@ -185,7 +185,7 @@ class ScoresApi(remote.Service):
 
     logging.info('Database stale - triggering crawl')
     taskqueue.add(url='/tasks/crawl_all_lists', method='GET',
-        params={'fake_data': 'false'}, queue_name='list-statuses')
+        queue_name='list-statuses')
 
   @endpoints.method(GamesRequest, GamesResponse,
                     path='all_games', http_method='GET')

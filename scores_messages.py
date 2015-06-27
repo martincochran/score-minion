@@ -163,7 +163,7 @@ class GamesRequest(messages.Message):
   league = messages.EnumField(League, 9)
 
   # Local time used to obtain the offset from UTC.
-  local_time = message_types.DateTimeField(10)
+  utc_offset_millis = messages.IntegerField(10)
 
 
 class GamesResponse(messages.Message):

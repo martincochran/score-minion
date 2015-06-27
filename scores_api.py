@@ -259,8 +259,9 @@ class ScoresApi(remote.Service):
       source = GameSource()
       source.type = GameSourceType.TWITTER
       localized_date = twt.created_at
-      if request.local_time and request.local_time.utcoffset():
-        localized_date = localized_date + request.local_time.utcoffset()
+      if request.utc_offset_millis:
+        localized_date = localized_date + timedelta(
+            seconds=(request.utc_offset_millis / 1000))
       source.update_time_utc_str = localized_date.strftime(
           tweets.DATE_PARSE_FMT_STR)
       source.twitter_account = TwitterAccount()

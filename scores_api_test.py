@@ -96,14 +96,7 @@ class ScoresApiTest(web_test_base.WebTestBase):
     request.division = scores_messages.Division.OPEN
     request.age_bracket = scores_messages.AgeBracket.NO_RESTRICTION
 
-    # Simulate PST
-    class TZ(tzinfo):
-      def utcoffset(self, dt):
-        return timedelta(minutes=-420)
-      def dst(self, dt):
-        return timedelta(minutes=0)
-
-    request.local_time = datetime.now(TZ())
+    request.utc_offset_millis = -420 * 60 * 1000
     response = self.api.GetGames(request)
     self.assertEquals(1, len(response.games))
     str_created_at = created_at.strftime(tweets.DATE_PARSE_FMT_STR)

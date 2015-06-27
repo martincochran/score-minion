@@ -15,6 +15,7 @@
 # limitations under the License.
 
 from protorpc import messages
+from protorpc import message_types
 
 
 class Division(messages.Enum):
@@ -160,6 +161,9 @@ class GamesRequest(messages.Message):
 
   # League of game. eg, AUDL or USAU.
   league = messages.EnumField(League, 9)
+
+  # Local time used to obtain the offset from UTC.
+  local_time = message_types.DateTimeField(10)
 
 
 class GamesResponse(messages.Message):

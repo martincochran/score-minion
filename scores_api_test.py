@@ -14,7 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
+from datetime import datetime, timedelta, tzinfo
+import json
+import logging
 import mock
 import os
 import unittest
@@ -28,6 +30,8 @@ from google.appengine.ext import testbed
 
 import endpoints
 from endpoints import api_config
+
+import tweets
 
 # Mock out the endpoints method
 def null_decorator(*args, **kwargs):
@@ -69,6 +73,48 @@ class ScoresApiTest(web_test_base.WebTestBase):
         self.api.GetGameInfo(scores_messages.GameInfoRequest()))
 
   @mock.patch.object(app_identity, 'app_identity')
+  def testGetGames_gameTweetLocalizedDate(self, mock_app_identity):
+    mock_app_identity.get_default_version_hostname = mock.MagicMock()
+    mock_app_identity.get_default_version_hostname.return_value = 'production host'
+
+    twt = tweets.Tweet.fromJson(
+        json.loads(
+          '{"user": {"id_str": "1234", "id": 1234, "screen_name": "bob"},'
+          '"id":232,'
+          '"id_str":"232",'
+          '"text":"Up 12-11.",'
+          '"lang":"en"}'))
+
+    # Pretend we crawled this from an club open list.
+    twt.from_list = '186732484'
+
+    # Record the time it was created at (UTC)
+    created_at = twt.created_at
+    twt.put()
+    request = scores_messages.GamesRequest()
+    request.league = scores_messages.League.USAU
+    request.division = scores_messages.Division.OPEN
+    request.age_bracket = scores_messages.AgeBracket.NO_RESTRICTION
+
+    # Simulate PST
+    class TZ(tzinfo):
+      def utcoffset(self, dt):
+        return timedelta(minutes=-420)
+      def dst(self, dt):
+        return timedelta(minutes=0)
+
+    request.local_time = datetime.now(TZ())
+    response = self.api.GetGames(request)
+    self.assertEquals(1, len(response.games))
+    str_created_at = created_at.strftime(tweets.DATE_PARSE_FMT_STR)
+    logging.info('Created at UTC date: %s', str_created_at)
+    logging.info('API date: %s',
+      response.games[0].last_update_source.update_time_utc_str)
+    self.assertFalse(str_created_at ==
+      response.games[0].last_update_source.update_time_utc_str)
+    
+
+  @mock.patch.object(app_identity, 'app_identity')
   @mock.patch.object(taskqueue, 'add')
   def testGetGames_noTriggerCrawl(self, mock_add_queue, mock_app_identity):
     """Ensure crawl is not triggered if the datebase is up-to-date."""
@@ -90,10 +136,10 @@ class ScoresApiTest(web_test_base.WebTestBase):
   def testGetGames_triggerCrawl(self, mock_add_queue, mock_app_identity):
     """Ensure crawl is triggered if the database is stale."""
     # Add a tweet to the database that was crawled yesterday.
-    yesterday_date = datetime.datetime.now() - datetime.timedelta(days=1)
+    yesterday_date = datetime.now() - timedelta(days=1)
 
     # Subtract the delta that's used in the API logic.
-    yesterday_date = yesterday_date - datetime.timedelta(
+    yesterday_date = yesterday_date - timedelta(
         hours=scores_api.MAX_HOURS_CRAWL_LATENCY)
     twt = self.CreateTweet('2', ['bob', '5'], created_at=yesterday_date)
     twt.put()

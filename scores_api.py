@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-import datetime
+from datetime import datetime, timedelta
 import endpoints
 import logging
 import math
@@ -174,10 +174,10 @@ class ScoresApi(remote.Service):
       return
     
     # Get the most recent tweet and compare it to UTC now
-    now = datetime.datetime.now()
+    now = datetime.utcnow()
     twts = tweets.Tweet.query().order(-tweets.Tweet.created_at).fetch(1)
 
-    if len(twts) and now - twts[0].created_at < datetime.timedelta(
+    if len(twts) and now - twts[0].created_at < timedelta(
         hours=MAX_HOURS_CRAWL_LATENCY):
       logging.debug('Not triggering crawl: time of last crawled tweet %s',
           twts[0].created_at)
@@ -258,7 +258,10 @@ class ScoresApi(remote.Service):
       game.game_status = GameStatus.UNKNOWN
       source = GameSource()
       source.type = GameSourceType.TWITTER
-      source.update_time_utc_str = twt.created_at.strftime(
+      localized_date = twt.created_at
+      if request.local_time and request.local_time.utcoffset():
+        localized_date = localized_date + request.local_time.utcoffset()
+      source.update_time_utc_str = localized_date.strftime(
           tweets.DATE_PARSE_FMT_STR)
       source.twitter_account = TwitterAccount()
       source.twitter_account.screen_name = twt.author_screen_name

@@ -45,7 +45,7 @@ def tweet_key(tweet_id, tweet_table_name=DEFAULT_TWEET_DB_NAME):
 
 
 def ParseTweetDateString(date_str, tweet_id='', user_id=''):
-  """Parses a date string from a tweet, returning 'now' on failure.
+  """Parses a date string from a tweet, returning 'utcnow' on failure.
 
   Args:
     date_str: The date string to be parsed.
@@ -55,7 +55,7 @@ def ParseTweetDateString(date_str, tweet_id='', user_id=''):
   if not date_str:
     id_value, date_type = CalculateDateType(tweet_id, user_id)
     logging.warning('Empty creation date in %s id %s', date_type, id_value)
-    return datetime.datetime.now()
+    return datetime.datetime.utcnow()
   try:
     # Convert to UTC time by manually parsing the timedelta because it is not
     # supported on all platforms.
@@ -65,7 +65,7 @@ def ParseTweetDateString(date_str, tweet_id='', user_id=''):
   except ValueError:
     logging.warning('Failed to parse date "%s" from tweet id %s, user id %s',
         date_str, tweet_id, user_id)
-    return datetime.datetime.now()
+    return datetime.datetime.utcnow()
 
 
 def ParseUtcTimeDelta(td_str):

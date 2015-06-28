@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime, timedelta, tzinfo
+from datetime import datetime, timedelta
 import json
 import logging
 import mock
@@ -73,7 +73,8 @@ class ScoresApiTest(web_test_base.WebTestBase):
         self.api.GetGameInfo(scores_messages.GameInfoRequest()))
 
   @mock.patch.object(app_identity, 'app_identity')
-  def testGetGames_gameTweetLocalizedDate(self, mock_app_identity):
+  def testGetGames_gameTweet(self, mock_app_identity):
+    """Verify the API handles the case where a game is returned."""
     mock_app_identity.get_default_version_hostname = mock.MagicMock()
     mock_app_identity.get_default_version_hostname.return_value = 'production host'
 
@@ -88,24 +89,14 @@ class ScoresApiTest(web_test_base.WebTestBase):
     # Pretend we crawled this from an club open list.
     twt.from_list = '186732484'
 
-    # Record the time it was created at (UTC)
-    created_at = twt.created_at
     twt.put()
     request = scores_messages.GamesRequest()
     request.league = scores_messages.League.USAU
     request.division = scores_messages.Division.OPEN
     request.age_bracket = scores_messages.AgeBracket.NO_RESTRICTION
 
-    request.utc_offset_millis = -420 * 60 * 1000
     response = self.api.GetGames(request)
     self.assertEquals(1, len(response.games))
-    str_created_at = created_at.strftime(tweets.DATE_PARSE_FMT_STR)
-    logging.info('Created at UTC date: %s', str_created_at)
-    logging.info('API date: %s',
-      response.games[0].last_update_source.update_time_utc_str)
-    self.assertFalse(str_created_at ==
-      response.games[0].last_update_source.update_time_utc_str)
-    
 
   @mock.patch.object(app_identity, 'app_identity')
   @mock.patch.object(taskqueue, 'add')

@@ -162,9 +162,6 @@ class GamesRequest(messages.Message):
   # League of game. eg, AUDL or USAU.
   league = messages.EnumField(League, 9)
 
-  # Local time used to obtain the offset from UTC.
-  utc_offset_millis = messages.IntegerField(10)
-
 
 class GamesResponse(messages.Message):
   """Response for GetGames."""

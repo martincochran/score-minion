@@ -1,3 +1,5 @@
+total_storage_limit: 120M
+
 # There is a queue for each type of API call to the twitter API so we can
 # avoid getting rate-limited
 queue:
@@ -7,6 +9,5 @@ queue:
   rate: 12/m
 
 # /lists/ownerships.json
-queue:
 - name: list-lists
   rate: 1/m

@@ -16,6 +16,7 @@
 
 import datetime
 import os
+import uuid
 
 from google.appengine.ext import ndb
 from google.appengine.ext.ndb import msgprop
@@ -39,7 +40,7 @@ APP_VERSION = os.environ.get('CURRENT_VERSION_ID', '-1')
 UNKNOWN_TOURNAMENT_ID = "unknown_id"
 
 
-# We want operations on an individual user to be consistent.
+# We want operations on an individual game to be consistent.
 def game_key_full(game_id, game_table_name=DEFAULT_GAME_DB_NAME):
   return ndb.Key('Game', '%s_%s' % (DEFAULT_GAME_DB_NAME, game_id))
 
@@ -105,13 +106,20 @@ class GameSource(ndb.Model):
   score_reporter_url = ndb.StringProperty('url')
 
   # Twitter ID of account which contributed to this game.
-  twitter_id = ndb.IntegerProperty('t_id')
+  account_id = ndb.IntegerProperty('a_id')
+
+  # ID of tweet adding the source
+  tweet_id = ndb.IntegerProperty('t_id')
 
   # Text from the tweet.
   tweet_text = ndb.StringProperty('tt')
 
   @classmethod
   def FromProto(cls, proto_obj):
+    """Create GameSource ndb object from the API Proto.
+
+    The conversion is lossy since the API Proto does not have the tweet ID.
+    """
     source = GameSource()
     source.type = proto_obj.type
     if proto_obj.update_time_utc_str:
@@ -120,11 +128,11 @@ class GameSource(ndb.Model):
     else:
       source.update_date_time = datetime.datetime.now()
     if proto_obj.twitter_account:
-      source.twitter_id = long(proto_obj.twitter_account.id_str)
+      source.account_id = long(proto_obj.twitter_account.id_str)
       source.tweet_text = proto_obj.tweet_text
     if proto_obj.score_reporter_url:
       source.score_reporter_url = proto_obj.score_reporter_url
-    if not (source.twitter_id or source.score_reporter_url):
+    if not (source.account_id or source.score_reporter_url):
       raise GameModelError('Converting GameSource from malformed proto')
     return source
 
@@ -134,7 +142,8 @@ class GameSource(ndb.Model):
     return GameSource(type=scores_messages.GameSourceType.TWITTER,
                       update_date_time=twt.created_at,
                       tweet_text=twt.text,
-                      twitter_id=twt.author_id_64)
+                      tweet_id=twt.id_64,
+                      account_id=twt.author_id_64)
   def ToProto(self):
     source = scores_messages.GameSource()
     source.type = self.type
@@ -144,9 +153,9 @@ class GameSource(ndb.Model):
     else:
       source.update_time_utc_str = datetime.datetime.now().strftime(
           tweets.DATE_PARSE_FMT_STR)
-    if self.twitter_id:
+    if self.account_id:
       account = scores_messages.TwitterAccount()
-      account.id_str = str(self.twitter_id)
+      account.id_str = str(self.account_id)
       source.twitter_account = account
       source.tweet_text = self.tweet_text
     if self.score_reporter_url:
@@ -181,7 +190,8 @@ class Game(ndb.Model):
   # There must be at least one source for each game.
   sources = ndb.StructuredProperty(GameSource, 'so', repeated=True)
 
-  # Date & time the game was created in the DB.
+  # Date & time the game was created in the DB, or the creation date of the
+  # tweet it was initialized from if that was the creation method.
   created_at = ndb.DateTimeProperty('cd', required=True)
 
   # Last time the Game was updated.
@@ -206,6 +216,37 @@ class Game(ndb.Model):
                 sources=[GameSource.FromProto(proto_obj.last_update_source)],
                 parent=game_key(proto_obj))
 
+  @classmethod
+  def FromTweet(cls, twt, teams, scores, division, age_bracket, league):
+    """Builds a Game object from a tweet and the specified teams.
+
+    Args:
+      twt: The tweets.Tweet object
+      teams: A list of exactly two Team objects derived from that Tweet.
+      scores: A list of exactly two integer scores derived from that Tweet.
+      division: The Division of the teams playing.
+      age_bracket: The AgeBracket of the teams playing.
+      league: The League of the teams playing.
+    Returns:
+      A Game object with the given properties.
+    """
+    game_id = 'game_%s' % str(uuid.uuid4())
+    tournament_id = 'tourney_%s' % str(uuid.uuid4())
+    return Game(id_str=game_id,
+        teams=teams,
+        scores=scores,
+        name='',
+        tournament_id=tournament_id,
+        tournament_name='Unknown tournament',
+        game_status=scores_messages.GameStatus.UNKNOWN,
+        division=division,
+        league=league,
+        age_bracket=age_bracket,
+        created_at=twt.created_at,
+        last_modified_at=twt.created_at,
+        sources=[GameSource.FromTweet(twt)],
+        parent=game_key_full(game_id))
+
   def ToProto(self):
     """Builds a Game protobuf object from this instance."""
     game = scores_messages.Game()
@@ -220,5 +261,5 @@ class Game(ndb.Model):
     game.league = self.league
     game.age_bracket = self.age_bracket
     if self.sources:
-      game.last_update_source = self.sources[-1].ToProto()
+      game.last_update_source = self.sources[0].ToProto()
     return game

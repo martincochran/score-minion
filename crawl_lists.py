@@ -15,16 +15,25 @@
 # limitations under the License.
 #
 
-import datetime
+from datetime import datetime, timedelta
 import logging
+import math
 import os
 
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 from google.appengine.ext import ndb
 
+from game_model import Game
+from game_model import GameSource
+from game_model import Team
+from scores_messages import AgeBracket
+from scores_messages import Division
+from scores_messages import League
+
 import webapp2
 
+import list_id_bimap
 import oauth_token_manager
 import tweets
 import twitter_fetcher
@@ -48,6 +57,14 @@ POSTS_TO_RETRIEVE = 200L
 
 # Value to indicate that there are no tweets in the stream
 FIRST_TWEET_IN_STREAM_ID = 2L
+
+# Threshold for consistency score where we add a tweet to a game instead of
+# creating a new one.
+GAME_CONSISTENCY_THRESHOLD = 1.0
+
+UNKNOWN_SR_ID = 'unknown_id'
+
+MAX_LENGTH_OF_GAME_IN_HOURS = 5
 
 
 def lists_key(lists_table_name=DEFAULT_LISTS_DB_NAME, user=ADMIN_USER):
@@ -167,6 +184,24 @@ class CrawlListHandler(webapp2.RequestHandler):
     # the backend.
     last_tweet_id = last_tweet_id - 1
 
+    # In parallel: look-up the latest set of games for this
+    # division and cache it
+    games_query = Game.query().order(-Game.last_modified_at)
+
+    division, age_bracket, league = list_id_bimap.ListIdBiMap.GetStructuredPropertiesForList(
+        list_id)
+    games_query = games_query.filter(Game.division == division)
+    games_query = games_query.filter(Game.age_bracket == age_bracket)
+    games_query = games_query.filter(Game.league == league)
+
+    # Only pull up games for the last two weeks.
+    # TODO: run a separate query for games populated from score reporter, which
+    # may have been created weeks before the actual game.
+    now = datetime.utcnow()
+    games_query = games_query.filter(Game.last_modified_at > now - timedelta(weeks=2))
+
+    games_future = games_query.fetch_async()
+
     try:
       json_obj = fetcher.ListStatuses(list_id, count=num_to_crawl,
           since_id=last_tweet_id, max_id=max_id,
@@ -175,12 +210,23 @@ class CrawlListHandler(webapp2.RequestHandler):
       msg = 'Could not fetch statuses for list %s' % list_id
       logging.warning('%s: %s', msg, e)
       self.response.write(msg)
+
+      # TODO: retry the request a fixed # of times
       return
+
+    existing_games = games_future.get_result()
+
+    # This will keep track of games that we add during processing of these tweets.
+    added_games = []
+
+    users = {}
     
     # Keep track of the first tweet in the list for bookkeeping purposes.
     latest_incoming_tweet = None
     oldest_incoming_tweet = None
     for json_twt in json_obj:
+      # TODO: consider writing all of these at the same time / in one transaction, possibly
+      # in the same transaction that updates all the games as well.
       twt = tweets.Tweet.getOrInsertFromJson(json_twt, from_list=list_id)
       if not latest_incoming_tweet:
         latest_incoming_tweet = twt
@@ -188,9 +234,23 @@ class CrawlListHandler(webapp2.RequestHandler):
         # TODO: need to keep track of a counter, fire alert
         logging.warning('Could not parse tweet from %s', json_twt)
         continue
+
+      model_user = tweets.User.getOrInsertFromJson(json_twt.get('user', {}))
+      if model_user and not users.get(model_user.id_str, None):
+        users[model_user.id_str] = model_user
+
+      self._PossiblyAddTweetToGame(twt, existing_games, added_games, users,
+          division, age_bracket, league)
       oldest_incoming_tweet = twt
 
       tweets.User.getOrInsertFromJson(json_twt.get('user', {}))
+
+    # TODO(NEXT): Consider merging the games if they are appropriately consistent.
+
+    # Update the games
+    # TOOD: consider doing this in one transaction to save time
+    for game in existing_games + added_games:
+      game.put()
 
     num_crawled = len(json_obj)
     total_crawled = self._ParseLongParam('total_crawled')
@@ -257,6 +317,165 @@ class CrawlListHandler(webapp2.RequestHandler):
         total_crawled, num_tweets_crawled)
     return taskqueue.add(url='/tasks/crawl_list', method='GET',
         params=params, queue_name='list-statuses')
+
+  def _PossiblyAddTweetToGame(self, twt, existing_games, added_games, user_map,
+      division, age_bracket, league):
+    """Determine if a tweet is a game tweet and add it to a game if so.
+
+    Args:
+      twt: tweets.Tweet object to be processed.
+      existing_games: list of game_model.Game objects that are currently in the
+        db.
+      added_games: list of game_model.Game objects that have been added as part 
+        of this crawl request.
+      user_map: map of string user ids to users which have authored a tweet
+        during this crawl cycle and thus may not be propagated in the db yet.
+      division: Division to set new Game to, if creating one
+      age_bracket: AgeBracket to set new Game to, if creating one
+      league: League to set new Game to, if creating one
+    """
+    if not twt:
+      return
+    if not twt.two_or_more_integers:
+      return
+
+    score_indicies = self._FindScoreIndicies(twt.entities.integers, twt.text)
+    if not score_indicies:
+      logging.debug('Ignoring tweet - numbers aren\'t scores: %s', twt.text)
+      return
+
+    teams = self._FindTeamsInTweet(twt, user_map)
+    scores = [twt.entities.integers[score_indicies[0]].num,
+          twt.entities.integers[score_indicies[1]].num]
+    (consistency_score, game) = self._FindMostConsistentGame(
+        twt, existing_games, added_games, teams, division, age_bracket, league)
+
+    # Try to find a game that matches this tweet in existing games. If no such
+    # game exists, create one.
+    if consistency_score < GAME_CONSISTENCY_THRESHOLD:
+      added_games.append(Game.FromTweet(twt, teams, scores, division,
+        age_bracket, league))
+    else:
+      for source in game.sources:
+        if twt.id_64 == source.tweet_id:
+          logging.debug('Tried to add tweet more than once as game source %s',
+              twt)
+          return
+      game.sources.append(GameSource.FromTweet(twt))
+      game.sources.sort(cmp=lambda x,y: cmp(y.update_date_time,
+        x.update_date_time))
+
+  def _FindMostConsistentGame(self, twt, existing_games, added_games, teams,
+      division, age_bracket, league):
+    """Returns the game most consistent with the given games.
+
+    If no game is found to be at all consistent, the consistency score returned
+    will be 0.0 and the matching game will be None. existing_games and
+    added_games should be pre-filtered to contain only those games with the
+    correct domain, age bracket, and league.
+
+    Args:
+      twt: tweets.Tweet object to be processed.
+      existing_games: list of game_model.Game objects that are currently in the
+        db.
+      added_games: list of game_model.Game objects that have been added as part 
+        of this crawl request.
+      teams: list of game_model.Team objects involved in this game.
+      division: Division to set new Game to, if creating one
+      age_bracket: AgeBracket to set new Game to, if creating one
+      league: League to set new Game to, if creating one
+
+    Returns:
+      A (score, game) pair of the game that matches mostly closely with the
+      tweet as well as a confidence score in the match.
+    """
+    for game in existing_games + added_games:
+      for game_team in game.teams:
+        for tweet_team in teams:
+          if game_team.twitter_id != tweet_team.twitter_id:
+            continue
+          if game_team.twitter_id == None and game_team.score_reporter_id == UNKNOWN_SR_ID:
+            logging.debug('No useful identifier found for game team %s', game_team)
+          if tweet_team.twitter_id == None and tweet_team.score_reporter_id == UNKNOWN_SR_ID:
+            logging.debug('No useful identifier found for tweet_team %s', tweet_team)
+            continue
+
+          # So one of the teams is the same. If this game happened within the last few
+          # hours it's probably the same game.
+          # TODO(NEXT): do something more sophisticated based on the score updates in the game.
+          max_game_length = timedelta(hours=MAX_LENGTH_OF_GAME_IN_HOURS)
+          if twt.created_at - game.last_modified_at < max_game_length:
+            return (1.0, game)
+        
+    return (0.0, None)
+
+  def _FindTeamsInTweet(self, twt, user_map):
+    """Find the teams this tweet refers to.
+
+    Determine the two teams this twt is referring to. Currently this only
+    works for tweets where one of the authors is one team and only one
+    game score is included in the tweet text. Sorry, Ultiworld :)
+
+    Args:
+      twt: tweets.Tweet object
+      user_map: map from string user ids to users who have authored a tweet
+        during this crawl cycle.
+    Returns:
+      A list of exactly two game_model.Team objects. If the teams cannot be
+      determined then the team.score_reporter_id will be set to UNKNOWN_SR_ID
+      and no other object properties will be set.
+    """
+    if user_map.get(twt.author_id):
+      this_team = Team.FromTwitterUser(user_map.get(twt.author_id))
+    else:
+      # TODO: lookup user name using memcache
+      account_query = tweets.User.query().order(tweets.User.screen_name)
+      account_query = account_query.filter(tweets.User.id_str == twt.author_id)
+      user = account_query.fetch(1)
+      if user:
+        this_team = Team.FromTwitterUser(user[0])
+      else:
+        this_team = Team(score_reporter_id=UNKNOWN_SR_ID)
+
+    # TODO: add logic to handle the case where the author of the tweet is not
+    # involved in the game.
+
+    # TODO(NEXT): make some effort to determine the other team, perhaps based on user
+    # account mention.
+    other_team = Team(score_reporter_id=UNKNOWN_SR_ID)
+
+    return [this_team, other_team]
+
+  def _FindScoreIndicies(self, integer_entities, tweet_text):
+    """Return the two integer entities referring to the score.
+
+    Args:
+      integer_entities: a list of tweets.IntegerEntity objects.
+      tweet_text: Tweet text for logging purposes.
+
+    Returns:
+      The indicies of the objects referring to the scores, or an empty list if
+      there are no suitable indicies.
+    """
+    for i in range(len(integer_entities) - 1):
+      entA = integer_entities[i]
+      entB = integer_entities[i+1]
+      # For now, be very restrictive: only two integers who are close to one
+      # another.
+      if math.fabs(entA.end_idx - entB.start_idx) > 4.0:
+        logging.debug('Integers too far apart: %s', tweet_text)
+        continue
+      # The score can't be too high. Some AUDL / MLU games might go to 
+      # high scores if there are multiple overtimes.
+      if entA.num + entB.num > 100:
+        logging.debug('Numbers sum to too high of a number: %s', tweet_text)
+        continue
+      if tweet_text[entA.end_idx:entB.start_idx].find('-') != -1:
+        return [i, i+1]
+      logging.debug('Could not find "-" in tweet text: %s', tweet_text)
+    # TODO: need to do something more sophisticated for this tweets with multiple
+    # games.
+    return []
 
   # TODO: consider making this and other datastore writes in this function
   # transactional to be more resilient to errors / bugs / API service outages.

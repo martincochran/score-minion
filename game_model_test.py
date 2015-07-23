@@ -133,13 +133,22 @@ class GameModelTest(unittest.TestCase):
   def testGameSourceFromTweet(self):
     """Test GameSource creation from a tweets.Tweet class."""
     twt = web_test_base.WebTestBase.CreateTweet(
-        1, ('bob', 2), created_at=datetime.datetime.now())
+        1, ('bob', 2), created_at=datetime.datetime.utcnow())
     source = game_model.GameSource.FromTweet(twt)
 
     self.assertEquals(scores_messages.GameSourceType.TWITTER, source.type)
     self.assertEquals(None, source.score_reporter_url)
     self.assertEquals(twt.created_at, source.update_date_time)
-    self.assertEquals(2, source.twitter_id)
+    self.assertEquals(2, source.account_id)
+
+  def testGameFromTweet(self):
+    """Test creating a Game from a Tweet."""
+    twt = web_test_base.WebTestBase.CreateTweet(
+        1, ('bob', 2), created_at=datetime.datetime.utcnow())
+    game = game_model.Game.FromTweet(twt, [], [0, 0], scores_messages.Division.OPEN,
+        scores_messages.AgeBracket.NO_RESTRICTION, scores_messages.League.USAU)
+
+    self.assertFalse(game == None)
 
 
 if __name__ == '__main__':

@@ -26,6 +26,7 @@ from google.appengine.api import urlfetch_service_pb
 from google.appengine.api import urlfetch_stub
 from google.appengine.ext import testbed
 
+import game_model
 import tweets
 
 
@@ -64,12 +65,14 @@ class WebTestBase(unittest.TestCase):
     self.testbed.deactivate()
 
   @classmethod
-  def CreateTweet(cls, id_str, user_screen_name_and_id, created_at=None):
+  def CreateTweet(cls, id_str, user_screen_name_and_id, text='',
+      created_at=None):
     """Convience method to create a Tweet object with minimal required fields.
     
     Args:
       id_str: id of tweet
       user_screen_name_and_id: Pair of screen_name and id_str of user
+      text: Text of tweet.
       created_at: datetime of when Tweet was created.
     Returns:
       A Tweet object with these required fields.
@@ -82,12 +85,33 @@ class WebTestBase(unittest.TestCase):
     }
     d['id_str'] = str(id_str)
     d['id'] = long(id_str)
+    d['text'] = text
     if created_at:
       d['created_at'] = tweets.WriteTweetDateString(created_at)
 
     logging.debug('Created json object: %s', d)
     # We re-use the Tweet parser because it sets all the default fields correctly.
     return tweets.Tweet.fromJson(d)
+
+  @classmethod
+  def CreateUser(cls, id, screen_name, created_at=None):
+    """Convience method to create a User object with minimal required fields.
+    
+    Args:
+      id: (integer) id of user
+      screen_name: screen_name of user
+      created_at: datetime of when User was created.
+    Returns:
+      A User object with these required fields.
+    """
+    d = {}
+    d['id_str'] = str(id)
+    d['id'] = id
+    d['screen_name'] = screen_name
+    if created_at:
+      d['created_at'] = tweets.WriteTweetDateString(created_at)
+
+    return tweets.User.fromJson(d)
 
   def SetJsonResponse(self, json_str, status_code=200):
     """Set the json response content for twitter_fetcher."""
@@ -124,6 +148,11 @@ class WebTestBase(unittest.TestCase):
     tweet_query = tweets.Tweet.query()
     tweet_db = tweet_query.fetch(1000)
     self.assertEquals(expected_size, len(tweet_db))
+
+  def assertGameDbSize(self, expected_size):
+    query = game_model.Game.query()
+    game_db = query.fetch(1000)
+    self.assertEquals(expected_size, len(game_db))
 
   def assertUserDbContents(self, user_ids):
     """Assert that all users in the DB are in user_ids."""

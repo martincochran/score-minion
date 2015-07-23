@@ -225,6 +225,7 @@ class TwitterFetcher:
       response = self._LoadFakeResponse(url)
     else:
       try:
+        # TODO: check, possibly increase default timeout
         response = urlfetch.fetch(url, headers=self._BuildHeaders())
 
         # Check to see if we need to re-authenticate to get a new token.

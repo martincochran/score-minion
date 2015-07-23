@@ -31,6 +31,7 @@ from google.appengine.ext import testbed
 import endpoints
 from endpoints import api_config
 
+import game_model
 import tweets
 
 # Mock out the endpoints method
@@ -73,23 +74,19 @@ class ScoresApiTest(web_test_base.WebTestBase):
         self.api.GetGameInfo(scores_messages.GameInfoRequest()))
 
   @mock.patch.object(app_identity, 'app_identity')
-  def testGetGames_gameTweet(self, mock_app_identity):
+  @mock.patch.object(taskqueue, 'add')
+  def testGetGames_gameTweet(self, mock_add_queue, mock_app_identity):
     """Verify the API handles the case where a game is returned."""
     mock_app_identity.get_default_version_hostname = mock.MagicMock()
     mock_app_identity.get_default_version_hostname.return_value = 'production host'
 
-    twt = tweets.Tweet.fromJson(
-        json.loads(
-          '{"user": {"id_str": "1234", "id": 1234, "screen_name": "bob"},'
-          '"id":232,'
-          '"id_str":"232",'
-          '"text":"Up 12-11.",'
-          '"lang":"en"}'))
+    twt = web_test_base.WebTestBase.CreateTweet(
+        1, ('bob', 2), created_at=datetime.utcnow())
+    game = game_model.Game.FromTweet(twt, [], [0, 0], scores_messages.Division.OPEN,
+        scores_messages.AgeBracket.NO_RESTRICTION, scores_messages.League.USAU)
+    game.put()
+    self.assertGameDbSize(1)
 
-    # Pretend we crawled this from an club open list.
-    twt.from_list = '186732484'
-
-    twt.put()
     request = scores_messages.GamesRequest()
     request.league = scores_messages.League.USAU
     request.division = scores_messages.Division.OPEN

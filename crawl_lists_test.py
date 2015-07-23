@@ -24,6 +24,11 @@ import test_env_setup
 from google.appengine.api import taskqueue
 
 import crawl_lists
+from game_model import Game
+from scores_messages import AgeBracket
+from scores_messages import Division
+from scores_messages import League
+import tweets
 import web_test_base
 
 
@@ -127,7 +132,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     
   @mock.patch.object(taskqueue, 'add')
   def testCrawlList_allNewTweets(self, mock_add_queue):
-    now = datetime.datetime.now()
+    now = datetime.datetime.utcnow()
     fake_tweets = [
         self.CreateTweet(4, ('alice', 3), created_at=now + datetime.timedelta(1, 0, 0)),
         self.CreateTweet(1, ('bob', 2), created_at=now)
@@ -139,6 +144,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     self.assertTweetDbContents(['1', '4'], '123')
     self.assertUserDbContents(['2', '3'])
+    self.assertGameDbSize(0)
 
     # Now update it again - there should be no new entries
     self.SetTimelineResponse(list(fake_tweets))
@@ -147,6 +153,28 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     self.assertTweetDbContents(['1', '4'], '123')
     self.assertUserDbContents(['2', '3'])
+    self.assertGameDbSize(0)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlList_tweetsWithGames(self, mock_add_queue):
+    now = datetime.datetime.utcnow()
+    fake_tweets = [
+        self.CreateTweet(4, ('alice', 3), text='5-7', created_at=now),
+        self.CreateTweet(1, ('bob', 2), text='3-5', created_at=now)
+    ]
+    self.SetTimelineResponse(list(fake_tweets))
+
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+
+    self.assertTweetDbContents(['1', '4'], '123')
+    self.assertUserDbContents(['2', '3'])
+
+    # There should be two games, one for each tweet.
+    self.assertGameDbSize(2)
 
     calls = mock_add_queue.mock_calls
     self.assertEquals(0, len(calls))
@@ -166,7 +194,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     # Real list ids and sizes. Uncomment this and run if these ever change.
     #list_ids = ['186732484', '186732631', '186814318', '186814882',
-        #'186815046', '186926608', '186926651']
+    #    '186815046', '186926608', '186926651']
     #list_sizes = [62, 71, 64, 67, 83, 87, 90]
 
     # To add another JSON file that is the string output of a json object
@@ -190,7 +218,6 @@ class CrawlListsTest(web_test_base.WebTestBase):
       total_list_size += list_sizes[list_index]
       list_index += 1
       self.assertTweetDbSize(total_list_size)
-
 
   def testCrawlList_incrementalNewTweets(self):
     self.SetTimelineResponse(self.CreateTweet(1, ('bob', 2)))
@@ -361,6 +388,310 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertEquals(calls[0], mock.call(
         url='/tasks/update_lists_rate_limited', method='GET',
         queue_name='list-lists'))
+
+  def testFindTeamsInTweet(self):
+    """Verify that we can find the teams in a tweet."""
+    # Create a user and add it to the db.
+    user = self.CreateUser(2, 'bob')
+    user.put()
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    twt = self.CreateTweet(1, ('bob', 2))
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, {})
+
+    # Make sure we found 'bob' correctly.
+    self.assertEquals(2, teams[0].twitter_id)
+
+  def testFindTeamsInTweet_newUserThisCrawlCycle(self):
+    """Verify a user can be found when it's not in the db but was crawled."""
+    # Create a user and add it to the db.
+    user = self.CreateUser(2, 'bob')
+
+    user_db = {'2': user}
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    twt = self.CreateTweet(1, ('bob', 2))
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, user_db)
+
+    # Make sure we found 'bob' correctly.
+    self.assertEquals(2, teams[0].twitter_id)
+
+  def testFindTeamsInTweet_noExistingUser(self):
+    """Handle the case gracefully if the user doesn't exist in db."""
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    twt = self.CreateTweet(1, ('bob', 2))
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, {})
+
+    self.assertEquals(None, teams[0].twitter_id)
+    self.assertEquals(None, teams[1].twitter_id)
+
+  def testFindMostConsistentGame_noGamesInDb(self):
+    """Verify that it doesn't find any consistent games if none exist."""
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    twt = self.CreateTweet(1, ('bob', 2))
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, {})
+    (score, game) = crawl_lists_handler._FindMostConsistentGame(twt, [], [],
+        teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+
+    self.assertEquals(0.0, score)
+    self.assertEquals(None, game)
+
+  def testFindMostConsistentGame(self):
+    """Verify that it finds consistent games if it exists."""
+    user = self.CreateUser(2, 'bob')
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    now = datetime.datetime.utcnow()
+    twt = self.CreateTweet(1, ('bob', 2), created_at=now)
+
+    # The first team will be 'bob'
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, {'2': user})
+
+    # Create a game with 'bob' in that division, age_bracket, and league
+    game = Game(id_str='new game', teams=teams, scores=[5, 7],
+        division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
+        league=League.USAU, created_at=now, last_modified_at=now)
+
+    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game], [],
+        teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+
+    self.assertEquals(1.0, score)
+    self.assertEquals(game, found_game)
+
+  def testFindMostConsistentGame_noMatchingGamesWithTeam(self):
+    """Verify no consistent game is found if no games with that team exist."""
+    user = self.CreateUser(2, 'bob')
+    user.put()
+    user = self.CreateUser(3, 'alice')
+    user.put()
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    now = datetime.datetime.utcnow()
+
+    # Create a tweet for a different user than the one in the game.
+    twt = self.CreateTweet(1, ('alice', 3), created_at=now)
+
+    # The first team will be 'alice', 2nd will be unknown.
+    twt_teams = crawl_lists_handler._FindTeamsInTweet(twt, {})
+
+    twt = self.CreateTweet(2, ('bob', 2), created_at=now)
+
+    # The first team will be 'bob', 2nd will be unknown.
+    game_teams = crawl_lists_handler._FindTeamsInTweet(twt, {})
+
+    # Create a game with 'bob' in that division, age_bracket, and league
+    game = Game(id_str='new game', teams=game_teams, scores=[5, 7],
+        division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
+        league=League.USAU, created_at=now, last_modified_at=now)
+
+    # When we try to find a game that's consistent with the 'alice' teams
+    # it fails because the only known game has 'bob' and an unknown team.
+    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game], [],
+        twt_teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+
+    self.assertEquals(0.0, score)
+    self.assertEquals(None, found_game)
+
+  def testFindMostConsistentGame_matchingGamesWithTeamButNotMatchingTime(self):
+    """Verify no consistent game is found if update is too old."""
+    user = self.CreateUser(2, 'bob')
+    user.put()
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    now = datetime.datetime.utcnow()
+    twt = self.CreateTweet(1, ('bob', 2), created_at=now)
+
+    # The first team will be 'bob'
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, {})
+
+    # Create a game with 'bob' in that division, age_bracket, and league, but with
+    # an old date.
+    creation_date = now - datetime.timedelta(
+        hours=crawl_lists.MAX_LENGTH_OF_GAME_IN_HOURS + 1)
+    game = Game(id_str='new game', teams=teams, scores=[5, 7],
+        division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
+        league=League.USAU, created_at=creation_date,
+        last_modified_at=creation_date)
+
+    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game], [],
+        teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+
+    self.assertEquals(0.0, score)
+    self.assertEquals(None, found_game)
+
+  def testFindScoreIndicies(self):
+    """Sanity test for basic cases in FindScoreIndices."""
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    integers = [
+        tweets.IntegerEntity(num=5, start_idx=0, end_idx=1),
+        tweets.IntegerEntity(num=7, start_idx=3, end_idx=4)
+    ]
+    self.assertEquals([0, 1], crawl_lists_handler._FindScoreIndicies(
+      integers, '5-7'))
+
+    # Not the first score entity.
+    integers = [
+        tweets.IntegerEntity(num=5, start_idx=0, end_idx=1),
+        tweets.IntegerEntity(num=7, start_idx=10, end_idx=11),
+        tweets.IntegerEntity(num=9, start_idx=13, end_idx=14)
+    ]
+    self.assertEquals([1, 2], crawl_lists_handler._FindScoreIndicies(
+      integers, '5         7-9'))
+
+    # Integers too far apart.
+    integers = [
+        tweets.IntegerEntity(num=5, start_idx=0, end_idx=1),
+        tweets.IntegerEntity(num=7, start_idx=13, end_idx=14)
+    ]
+    self.assertEquals([], crawl_lists_handler._FindScoreIndicies(
+      integers, '5               7'))
+
+    # No '-' found
+    integers = [
+        tweets.IntegerEntity(num=5, start_idx=0, end_idx=1),
+        tweets.IntegerEntity(num=7, start_idx=10, end_idx=11),
+        tweets.IntegerEntity(num=9, start_idx=13, end_idx=14)
+    ]
+    self.assertEquals([], crawl_lists_handler._FindScoreIndicies(
+      integers, '5         7/9'))
+
+  def testPossiblyAddTweetToGame_dontAddTweetCases(self):
+    """Sanity test for cases where a game should not be created from a tweet."""
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+
+    added_games = []
+    # Gracefully handle twt being None.
+    crawl_lists_handler._PossiblyAddTweetToGame(None, [], added_games, {}, None,
+        None, None)
+    self.assertEquals([], added_games)
+
+    # Make a tweet with no integer entities.
+    twt = self.CreateTweet(1, ('bob', 2))
+    self.assertFalse(twt.two_or_more_integers)
+    crawl_lists_handler._PossiblyAddTweetToGame(twt, [], added_games, {},
+        Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+    self.assertEquals([], added_games)
+
+    # Now there are integer entities but they're too big.
+    twt = self.CreateTweet(1, ('bob', 2), text='50-55')
+    self.assertTrue(twt.two_or_more_integers)
+    crawl_lists_handler._PossiblyAddTweetToGame(twt, [], added_games, {},
+        Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+    self.assertEquals([], added_games)
+
+    # There are two numbers but it looks like a date, not a score.
+    twt = self.CreateTweet(1, ('bob', 2), text='5/5')
+    self.assertTrue(twt.two_or_more_integers)
+    crawl_lists_handler._PossiblyAddTweetToGame(twt, [], added_games, {},
+        Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+    self.assertEquals([], added_games)
+
+  def testPossiblyAddTweetToGame_newGame(self):
+    """Sanity test for cases where a game should be created from a tweet."""
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+
+    # Create a tweet with valid integer entities.
+    twt = self.CreateTweet(1, ('bob', 2), text='5-7')
+    self.assertTrue(twt.two_or_more_integers)
+
+    added_games = []
+    crawl_lists_handler._PossiblyAddTweetToGame(twt, [], added_games, {},
+        Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+    self.assertEquals(1, len(added_games))
+
+  def testPossiblyAddTweetToGame_existingGame(self):
+    """Sanity test for cases where a game be updated from a tweet."""
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+
+    user = self.CreateUser(2, 'bob')
+    user.put()
+
+    now = datetime.datetime.utcnow()
+    twt = self.CreateTweet(1, ('bob', 2), created_at=now)
+
+    # The first team will be 'bob'
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, {})
+
+    # Create a game with 'bob' in that division, age_bracket, and league
+    game = Game(id_str='new game', teams=teams, scores=[3, 5],
+        division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
+        league=League.USAU, created_at=now, last_modified_at=now)
+    sources_length = len(game.sources)
+
+    # Create a tweet with valid integer entities.
+    twt = self.CreateTweet(1, ('bob', 2), text='5-7')
+    self.assertTrue(twt.two_or_more_integers)
+
+    # Test case where the source was in an existing game.
+    existing_games = [game]
+    added_games = []
+    crawl_lists_handler._PossiblyAddTweetToGame(twt, existing_games,
+        added_games, {}, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+    self.assertEquals([], added_games)
+    self.assertEquals(sources_length + 1, len(game.sources))
+
+    # Add another twt
+    twt = self.CreateTweet(2, ('bob', 2))
+    twt.text = '7-9'
+    twt.entities.integers = [
+        tweets.IntegerEntity(num=7, start_idx=0, end_idx=1),
+        tweets.IntegerEntity(num=9, start_idx=3, end_idx=4)
+    ]
+    self.assertTrue(twt.two_or_more_integers)
+
+    # Test case where the source was in an added game.
+    sources_length = len(game.sources)
+    existing_games = []
+    added_games = [game]
+    crawl_lists_handler._PossiblyAddTweetToGame(twt, existing_games,
+        added_games, {}, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+    self.assertEquals([], existing_games)
+    self.assertEquals(1, len(added_games))
+    self.assertEquals(sources_length + 1, len(game.sources))
+
+  def testPossiblyAddTweetToGame_eachTweetOnlyOnce(self):
+    """Don't add the same tweet source twice."""
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+
+    user = self.CreateUser(2, 'bob')
+    user.put()
+
+    now = datetime.datetime.utcnow()
+    twt = self.CreateTweet(1, ('bob', 2), created_at=now)
+
+    # The first team will be 'bob'
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, {})
+
+    # Create a game with 'bob' in that division, age_bracket, and league
+    game = Game(id_str='new game', teams=teams, scores=[3, 5],
+        division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
+        league=League.USAU, created_at=now, last_modified_at=now)
+    sources_length = len(game.sources)
+
+    # Create a tweet with valid integer entities.
+    twt = self.CreateTweet(1, ('bob', 2))
+    twt.text = '5-7'
+    twt.entities.integers = [
+        tweets.IntegerEntity(num=5, start_idx=0, end_idx=1),
+        tweets.IntegerEntity(num=7, start_idx=3, end_idx=4)
+    ]
+    self.assertTrue(twt.two_or_more_integers)
+
+    # Test case where the source was in an existing game.
+    existing_games = [game]
+    added_games = []
+    crawl_lists_handler._PossiblyAddTweetToGame(twt, existing_games,
+        added_games, {}, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+    self.assertEquals([], added_games)
+    self.assertEquals(sources_length + 1, len(game.sources))
+
+    # Try to add the same tweet to the game again.
+    crawl_lists_handler._PossiblyAddTweetToGame(twt, existing_games,
+        added_games, {}, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+    self.assertEquals([], added_games)
+
+    # The sources length should be unchanged
+    self.assertEquals(sources_length + 1, len(game.sources))
 
 
 if __name__ == '__main__':

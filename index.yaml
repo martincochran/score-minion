@@ -16,6 +16,25 @@ indexes:
   - name: date_added
     direction: desc
 
+- kind: Game
+  properties:
+  - name: d
+  - name: l
+  - name: lm
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: id
+  - name: lm
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: l
+  - name: lm
+    direction: desc
+
 - kind: Tweet
   properties:
   - name: an

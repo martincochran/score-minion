@@ -40,6 +40,7 @@ from scores_messages import League
 from scores_messages import Team
 from scores_messages import TwitterAccount
 
+import game_model
 import tweets
 
 MAX_HOURS_CRAWL_LATENCY = 1
@@ -48,34 +49,6 @@ MAX_HOURS_CRAWL_LATENCY = 1
 WEB_CLIENT_ID = '245407672402-oisb05fsubs9l96jfdfhn4tnmju4efqe.apps.googleusercontent.com'
 
 # TODO: add Android client ID
-
-# Simple data structure to lookup lists if the league, division, and age
-# bracket were specified in the request.
-LIST_ID_MAP = {
-    League.USAU: {
-      Division.OPEN: {
-        AgeBracket.COLLEGE: '186814318',
-        AgeBracket.NO_RESTRICTION: '186732484',
-      },
-      Division.WOMENS: {
-        AgeBracket.COLLEGE: '186814882',
-        AgeBracket.NO_RESTRICTION: '186732631',
-      },
-      Division.MIXED: {
-        AgeBracket.NO_RESTRICTION: '186815046',
-      },
-    },
-    League.AUDL: {
-      Division.OPEN: {
-        AgeBracket.NO_RESTRICTION: '186926608',
-      },
-    },
-    League.MLU: {
-      Division.OPEN: {
-        AgeBracket.NO_RESTRICTION: '186926651',
-      },
-    },
-}
 
 
 @endpoints.api(name='scores', version='v1',
@@ -86,52 +59,31 @@ class ScoresApi(remote.Service):
   """Class which defines Score Minion API v1."""
 
   @staticmethod
-  def _LookupMatchingTweets(request, num=100):
-    """Returns a set of tweets from the DB matching the request criteria.
+  def _LookupMatchingGames(request, num=10):
+    """Returns a set of games from the DB matching the request criteria.
 
     Args:
       request: GamesRequest object specifying what games to look up
-      num: Number of tweets to retrieve from the DB
+      num: Number of games to retrieve from the DB
 
     Returns:
-      The list of Tweet objects that match the criteria.
+      The list of game_model.Game objects that match the criteria.
     """
     # Currently the only request filter is by division.
-    # TODO: support other filters (by tournament, eg) and relax requirement
-    # that division, league, and age must be specified.
-    list_id = ScoresApi._LookupListFromDivisionAgeAndLeague(
-        request.division, request.age_bracket, request.league)
-    if not list_id:
-      logging.info('No list id found from GamesRequest')
-      return []
+    # TODO: support other filters (by tournament, eg)
+    games_query = game_model.Game.query()
+    if request.division:
+      games_query = games_query.filter(game_model.Game.division == request.division)
+    if request.age_bracket:
+      games_query = games_query.filter(game_model.Game.age_bracket == request.age_bracket)
+    if request.league:
+      games_query = games_query.filter(game_model.Game.league == request.league)
+    games_query = games_query.order(-game_model.Game.last_modified_at)
 
-    logging.info('Found list id %s from request %s', list_id, request)
-
-    tweet_query = tweets.Tweet.query().order(-tweets.Tweet.created_at)
-    tweet_query = tweet_query.filter(tweets.Tweet.two_or_more_integers == True)
-    tweet_query = tweet_query.filter(tweets.Tweet.from_list == list_id)
-
-    return tweet_query.fetch(num)
-
-  @staticmethod
-  def _LookupListFromDivisionAgeAndLeague(division, age_bracket, league):
-    """Looks up the list_id which corresponds to the given division and league.
-
-    Args:
-      division: Division of interest
-      league: League of interest
-
-    Returns:
-      The list id corresponding to that league and division, or '' if no such
-      list exists.
-    """
-    d = LIST_ID_MAP.get(league, {})
-    if not d:
-      return ''
-    d = d.get(division, {})
-    if not d:
-      return ''
-    return d.get(age_bracket, '')
+    count = request.count
+    if not count:
+      count = num
+    return games_query.fetch(count)
 
   @staticmethod
   def _FindScoreIndicies(integer_entities, tweet_text):
@@ -193,7 +145,8 @@ class ScoresApi(remote.Service):
     """Exposes an API endpoint to retrieve the scores of multiple games.
 
     Can be reference on dev server by using the following URL:
-    http://localhost:8080/_ah/api/scores/v1/game
+    http://localhost:8080/_ah/api/scores/v1/all_games
+
     Args:
         request: An instance of GamesRequest parsed from the API request.
     Returns:
@@ -202,77 +155,15 @@ class ScoresApi(remote.Service):
     """
     # If the lists haven't been crawled in a while, crawl them.
     self._PossiblyEnqueueCrawling()
-    # TODO: if no division, league, or age_bracket specified, throw an error.
-    twts = self._LookupMatchingTweets(request)
-    logging.info('Found %d potentially matching tweets', len(twts))
-
     response = GamesResponse()
-
     response.games = []
-
-    teams_accounted_for = set()
-
-    for twt in twts:
-      score_indicies = ScoresApi._FindScoreIndicies(
-          twt.entities.integers, twt.text)
-
-      if not score_indicies:
-        logging.info('Ignoring tweet: %s', twt.text)
-        continue
-      else:
-        logging.info('Found suitable score in tweet: %s', twt.text)
-
-      if twt.author_id_64 in teams_accounted_for:
-        logging.info('Discarding tweet as part of another game: %s', twt.text)
-        continue
-
-      game = Game()
-      game.teams = [Team(), Team()]
-      account = TwitterAccount()
-      account.screen_name = twt.author_screen_name
-      account.id_str = twt.author_id
-      teams_accounted_for.add(twt.author_id_64)
-
-      # TODO: lookup user name and profile image URL using memcache
-      account_query = tweets.User.query().order(tweets.User.screen_name)
-      account_query = account_query.filter(tweets.User.id_str == twt.author_id)
-      user = account_query.fetch(1)
-      if user:
-        user = user[0]
-        account.user_defined_name = user.name
-        account.profile_image_url_https = user.profile_image_url_https
-      else:
-        logging.info('Could not look up user for id %s', twt.author_id)
-
-      game.teams[0].twitter_account = account
-      game.teams[1].score_reporter_id = 'unknown id'
-      game.scores = [twt.entities.integers[score_indicies[0]].num,
-          twt.entities.integers[score_indicies[1]].num]
-      game.id_str = 'game_%s' % str(uuid.uuid4())
-      game.name = ''
-      game.tournament_id_str = 'tourney_%s' % str(uuid.uuid4())
-      game.tournament_name = 'Unknown tournament'
-      game.league = request.league
-      game.division = request.division
-      game.age_bracket = request.age_bracket
-      game.game_status = GameStatus.UNKNOWN
-      source = GameSource()
-      source.type = GameSourceType.TWITTER
-      source.update_time_utc_str = twt.created_at.strftime(
-          tweets.DATE_PARSE_FMT_STR)
-      source.twitter_account = TwitterAccount()
-      source.twitter_account.screen_name = twt.author_screen_name
-      source.twitter_account.id_str = twt.id_str
-      source.tweet_text = twt.text 
-      game.last_update_source = source
-
-      response.games.append(game)
-
+    for game in self._LookupMatchingGames(request):
+      response.games.append(game.ToProto())
+      logging.info('returning game: %s', game)
     return response
 
   @endpoints.method(GameInfoRequest, GameInfoResponse,
-                    path='game', http_method='GET',
-                    name='game.info')
+                    path='game', http_method='GET')
   def GetGameInfo(self, request):
     """Exposes an API endpoint to query for scores for the current user.
     Args:
@@ -286,9 +177,31 @@ class ScoresApi(remote.Service):
         of TEXT, the results are ordered by the string value of the scores.
     """
     response = GameInfoResponse()
-    #source = GameSource()
-    #source.source_type = GameSourceType.SCORE_REPORTER
-    #response.score_reporter_source = source
+    if not request.game_id_str:
+      # TODO: throw error?
+      return response
+    games_query = game_model.Game.query(
+        game_model.Game.id_str == request.game_id_str).order(
+        -game_model.Game.last_modified_at)
+
+    games = games_query.fetch(1)
+    if not games:
+      return response
+    logging.info('game returned: %s', games[0])
+
+    num_sources = request.max_num_sources
+    if not num_sources:
+      num_sources = 50
+
+    num_added_sources = 0
+    for source in games[0].sources:
+      if source.type == GameSourceType.TWITTER:
+        response.twitter_sources.append(source.ToProto())
+      else:
+        response.score_reporter_source = source.ToProto()
+      num_added_sources += 1
+      if num_added_sources >= num_sources:
+        break
 
     return response
 

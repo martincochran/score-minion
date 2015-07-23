@@ -442,7 +442,7 @@ class Tweet(ndb.Model):
   date_modified = ndb.DateTimeProperty('dm', auto_now=True)
   num_entities = ndb.ComputedProperty(lambda self: len(self.entities.integers), 'ne')
   two_or_more_integers = ndb.ComputedProperty(
-      lambda self: len(self.entities.integers) > 1, 'tom')
+      lambda self: self.entities and len(self.entities.integers) > 1, 'tom')
 
   # The list ID if this tweet was indexed by getting statuses from a list.
   from_list = ndb.StringProperty('fl')
@@ -518,6 +518,11 @@ class Tweet(ndb.Model):
     }
     d['id_str'] = self.id_str
     d['id'] = self.id_64
+    d['text'] = self.text
+    d['lang'] = self.lang
+    d['favorite_count'] = self.favorite_count
+    d['retweet_count'] = self.retweet_count
+    d['source'] = self.source
 
     if self.created_at:
       d['created_at'] = WriteTweetDateString(self.created_at)

@@ -7,5 +7,6 @@ queue:
   rate: 12/m
 
 # /lists/ownerships.json
+queue:
 - name: list-lists
   rate: 1/m

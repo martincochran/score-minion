@@ -108,6 +108,33 @@ class ScoresApiTest(web_test_base.WebTestBase):
 
   @mock.patch.object(app_identity, 'app_identity')
   @mock.patch.object(taskqueue, 'add')
+  def testGetGames_gameTweetNoKnownTeams(self, mock_add_queue,
+      mock_app_identity):
+    """A game is returned with no known teams."""
+    mock_app_identity.get_default_version_hostname = mock.MagicMock()
+    mock_app_identity.get_default_version_hostname.return_value = 'production host'
+
+    twt = web_test_base.WebTestBase.CreateTweet(
+        1, ('bob', 2), created_at=datetime.utcnow())
+    teams = [game_model.Team(twitter_id=2), game_model.Team(
+      score_reporter_id='unknown')]
+    game = game_model.Game.FromTweet(twt, teams, [0, 0],
+        scores_messages.Division.OPEN,
+        scores_messages.AgeBracket.NO_RESTRICTION, scores_messages.League.USAU)
+    game.put()
+    self.assertGameDbSize(1)
+
+    request = scores_messages.GamesRequest()
+    request.league = scores_messages.League.USAU
+    request.division = scores_messages.Division.OPEN
+    request.age_bracket = scores_messages.AgeBracket.NO_RESTRICTION
+
+    response = self.api.GetGames(request)
+    self.assertEquals(1, len(response.games))
+    self.assertEquals(2, len(response.games[0].teams))
+
+  @mock.patch.object(app_identity, 'app_identity')
+  @mock.patch.object(taskqueue, 'add')
   def testGetGames_noTriggerCrawl(self, mock_add_queue, mock_app_identity):
     """Ensure crawl is not triggered if the datebase is up-to-date."""
     # Add a tweet to the database that was recently crawled.

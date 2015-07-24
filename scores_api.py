@@ -163,7 +163,7 @@ class ScoresApi(remote.Service):
 
       # Populate the team info in the response.
       for team in proto_game.teams:
-        if not team.twitter_account.id_str:
+        if not team.twitter_account:
           continue
 
         # TODO: save all users in memcache

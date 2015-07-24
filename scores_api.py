@@ -158,9 +158,26 @@ class ScoresApi(remote.Service):
     response = GamesResponse()
     response.games = []
     for game in self._LookupMatchingGames(request):
-      response.games.append(game.ToProto())
-      # TODO: lookup URL / other info for accounts
-      logging.info('returning game: %s', game)
+      proto_game = game.ToProto()
+      response.games.append(proto_game)
+
+      # Populate the team info in the response.
+      for team in proto_game.teams:
+        if not team.twitter_account.id_str:
+          continue
+
+        # TODO: save all users in memcache
+        user_id = team.twitter_account.id_str
+        account_query = tweets.User.query().order(tweets.User.screen_name)
+        account_query = account_query.filter(tweets.User.id_str == user_id)
+        user = account_query.fetch(1)
+        if not user:
+          continue
+        account = team.twitter_account
+        account.screen_name = user[0].screen_name
+        account.user_defined_name = user[0].name
+        account.profile_image_url_https = user[0].profile_image_url_https
+
     return response
 
   @endpoints.method(GameInfoRequest, GameInfoResponse,
@@ -189,6 +206,7 @@ class ScoresApi(remote.Service):
     if not games:
       return response
     logging.info('game returned: %s', games[0])
+    response.game = games[0].ToProto()
 
     num_sources = request.max_num_sources
     if not num_sources:

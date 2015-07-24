@@ -80,9 +80,14 @@ class ScoresApiTest(web_test_base.WebTestBase):
     mock_app_identity.get_default_version_hostname = mock.MagicMock()
     mock_app_identity.get_default_version_hostname.return_value = 'production host'
 
+    user = self.CreateUser(2, 'bob')
+    user.put()
+
     twt = web_test_base.WebTestBase.CreateTweet(
         1, ('bob', 2), created_at=datetime.utcnow())
-    game = game_model.Game.FromTweet(twt, [], [0, 0], scores_messages.Division.OPEN,
+    teams = [game_model.Team(twitter_id=2), game_model.Team(twitter_id=3)]
+    game = game_model.Game.FromTweet(twt, teams, [0, 0],
+        scores_messages.Division.OPEN,
         scores_messages.AgeBracket.NO_RESTRICTION, scores_messages.League.USAU)
     game.put()
     self.assertGameDbSize(1)
@@ -94,6 +99,9 @@ class ScoresApiTest(web_test_base.WebTestBase):
 
     response = self.api.GetGames(request)
     self.assertEquals(1, len(response.games))
+    self.assertEquals(2, len(response.games[0].teams))
+    self.assertEquals('bob',
+        response.games[0].teams[0].twitter_account.screen_name)
 
     # TODO: add games from other divisions and make sure the search operators
     # in the request work
@@ -139,7 +147,8 @@ class ScoresApiTest(web_test_base.WebTestBase):
 
   @mock.patch.object(app_identity, 'app_identity')
   @mock.patch.object(taskqueue, 'add')
-  def testGetGames_noTweetstriggerCrawl(self, mock_add_queue, mock_app_identity):
+  def testGetGames_noTweetstriggerCrawl(self, mock_add_queue,
+      mock_app_identity):
     """Ensure crawl is triggered when there are no tweets."""
     mock_app_identity.get_default_version_hostname = mock.MagicMock()
     mock_app_identity.get_default_version_hostname.return_value = 'production host'
@@ -150,9 +159,33 @@ class ScoresApiTest(web_test_base.WebTestBase):
     calls = mock_add_queue.mock_calls
     self.assertEquals(1, len(calls))
 
-  def testGetGameInfo(self):
+  @mock.patch.object(app_identity, 'app_identity')
+  @mock.patch.object(taskqueue, 'add')
+  def testGetGameInfo(self, mock_add_queue, mock_app_identity):
     """Test basic functionality of GetGameInfo."""
-    pass
+    twt = web_test_base.WebTestBase.CreateTweet(
+        1, ('bob', 2), created_at=datetime.utcnow())
+    game = game_model.Game.FromTweet(twt, [], [0, 0], scores_messages.Division.OPEN,
+        scores_messages.AgeBracket.NO_RESTRICTION, scores_messages.League.USAU)
+    game.put()
+    self.assertGameDbSize(1)
+
+    game_id = game.id_str
+
+    # First query with the wrong game ID.
+    request = scores_messages.GameInfoRequest()
+    request.game_id_str = game_id + 'extra_text'
+    response = self.api.GetGameInfo(request)
+    self.assertEquals(0, len(response.twitter_sources))
+    self.assertEquals(None, response.score_reporter_source)
+    self.assertEquals(None, response.game)
+
+    request = scores_messages.GameInfoRequest()
+    request.game_id_str = game_id
+    response = self.api.GetGameInfo(request)
+    self.assertEquals(1, len(response.twitter_sources))
+    self.assertEquals(None, response.score_reporter_source)
+    self.assertEquals(game_id, response.game.id_str)
 
 
 if __name__ == '__main__':

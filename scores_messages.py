@@ -188,6 +188,9 @@ class GameInfoResponse(messages.Message):
 
   score_reporter_source = messages.MessageField(GameSource, 2)
 
+  # Metadata about the game itself.
+  game = messages.MessageField(Game, 3)
+
 
 class PlayersOnTeamRequest(messages.Message):
   """Request to retrieve the players on a team."""

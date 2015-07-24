@@ -25,6 +25,7 @@ from google.appengine.api import taskqueue
 
 import crawl_lists
 from game_model import Game
+import list_id_bimap
 from scores_messages import AgeBracket
 from scores_messages import Division
 from scores_messages import League
@@ -401,6 +402,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     # Make sure we found 'bob' correctly.
     self.assertEquals(2, teams[0].twitter_id)
+    self.assertEquals(crawl_lists.UNKNOWN_SR_ID, teams[1].score_reporter_id)
 
   def testFindTeamsInTweet_newUserThisCrawlCycle(self):
     """Verify a user can be found when it's not in the db but was crawled."""
@@ -415,6 +417,47 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     # Make sure we found 'bob' correctly.
     self.assertEquals(2, teams[0].twitter_id)
+    self.assertEquals(crawl_lists.UNKNOWN_SR_ID, teams[1].score_reporter_id)
+
+  def testFindTeamsInTweet_userMentionOfSecondTeam(self):
+    """Verify a user can be found when it mentions another user."""
+    # Create a user and add it to the db.
+    bob = self.CreateUser(2, 'bob')
+    alice = self.CreateUser(3, 'alice')
+
+    user_db = {'2': bob, '3': alice}
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    twt = self.CreateTweet(1, ('bob', 2))
+    twt.entities.user_mentions = [tweets.UserMentionEntity(
+      user_id='3', user_id_64=3)]
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, user_db)
+
+    # Make sure we found 'bob' correctly.
+    self.assertEquals(2, teams[0].twitter_id)
+    self.assertEquals(3, teams[1].twitter_id)
+
+  def testFindTeamsInTweet_userMentionOfSecondTeamWrongDivision(self):
+    """Verify a user can be found when it mentions another user."""
+    # Create a user and add it to the db.
+    bob = self.CreateUser(2, 'bob')
+    bob.from_list = list_id_bimap.ListIdBiMap.USAU_COLLEGE_OPEN_LIST_ID
+    alice = self.CreateUser(3, 'alice')
+    alice.from_list = list_id_bimap.ListIdBiMap.USAU_COLLEGE_WOMENS_LIST_ID
+
+    user_db = {'2': bob, '3': alice}
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    twt = self.CreateTweet(1, ('bob', 2))
+    twt.entities.user_mentions = [tweets.UserMentionEntity(
+      user_id='3', user_id_64=3)]
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, user_db)
+
+    # Make sure we found 'bob' correctly.
+    self.assertEquals(2, teams[0].twitter_id)
+
+    # TODO(NEXT): uncomment this after DB is updated with this information
+    # self.assertEquals(crawl_lists.UNKNOWN_SR_ID, teams[1].score_reporter_id)
 
   def testFindTeamsInTweet_noExistingUser(self):
     """Handle the case gracefully if the user doesn't exist in db."""
@@ -631,12 +674,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertEquals(sources_length + 1, len(game.sources))
 
     # Add another twt
-    twt = self.CreateTweet(2, ('bob', 2))
-    twt.text = '7-9'
-    twt.entities.integers = [
-        tweets.IntegerEntity(num=7, start_idx=0, end_idx=1),
-        tweets.IntegerEntity(num=9, start_idx=3, end_idx=4)
-    ]
+    twt = self.CreateTweet(2, ('bob', 2), text='7-9')
     self.assertTrue(twt.two_or_more_integers)
 
     # Test case where the source was in an added game.
@@ -648,6 +686,62 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertEquals([], existing_games)
     self.assertEquals(1, len(added_games))
     self.assertEquals(sources_length + 1, len(game.sources))
+
+  def testPossiblyAddTweetToGame_existingGameNewMention(self):
+    """Test where a game and its teams should be updated from a tweet."""
+    user_map = {
+        '2': self.CreateUser(2, 'bob'),
+        '3': self.CreateUser(3, 'alice'),
+        '4': self.CreateUser(3, 'eve'),
+    }
+
+    now = datetime.datetime.utcnow()
+    twt = self.CreateTweet(1, ('bob', 2), created_at=now)
+
+    # The first team will be 'bob' and the second will be 'unknown'.
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, user_map)
+
+    # Create a game with 'bob' in that division, age_bracket, and league
+    game = Game(id_str='new game', teams=teams, scores=[3, 5],
+        division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
+        league=League.USAU, created_at=now, last_modified_at=now)
+    sources_length = len(game.sources)
+
+    # Create a tweet with valid integer entities and a user mention.
+    twt = self.CreateTweet(1, ('bob', 2), text='5-7')
+    twt.entities.user_mentions = [tweets.UserMentionEntity(
+      user_id='3', user_id_64=3)]
+    self.assertTrue(twt.two_or_more_integers)
+
+    # Test case where the source was in an existing game.
+    existing_games = [game]
+    added_games = []
+    crawl_lists_handler._PossiblyAddTweetToGame(twt, existing_games,
+        added_games, user_map, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+    self.assertEquals([], added_games)
+    self.assertEquals(sources_length + 1, len(game.sources))
+
+    # Verify the second team is updated from that tweet.
+    self.assertEquals(2, game.teams[0].twitter_id)
+    self.assertEquals(3, game.teams[1].twitter_id)
+
+    # Add another twt but with a different user mention.
+    twt = self.CreateTweet(2, ('bob', 2), text='7-9')
+    twt.entities.user_mentions = [tweets.UserMentionEntity(
+      user_id='4', user_id_64=4)]
+    self.assertTrue(twt.two_or_more_integers)
+
+    # Tweet is added to the game, but the new team is *not* added (see
+    # comment in crawl_lists.CrawListsHandler._MergeTeamsIntoGame for why).
+    crawl_lists_handler._PossiblyAddTweetToGame(twt, existing_games,
+        added_games, user_map, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU)
+    self.assertEquals([], added_games)
+    self.assertEquals(sources_length + 2, len(game.sources))
+
+    # Verify the second team is updated from that tweet.
+    self.assertEquals(2, game.teams[0].twitter_id)
+    self.assertEquals(3, game.teams[1].twitter_id)
 
   def testPossiblyAddTweetToGame_eachTweetOnlyOnce(self):
     """Don't add the same tweet source twice."""

@@ -95,6 +95,9 @@ class ScoresApiTest(web_test_base.WebTestBase):
     response = self.api.GetGames(request)
     self.assertEquals(1, len(response.games))
 
+    # TODO: add games from other divisions and make sure the search operators
+    # in the request work
+
   @mock.patch.object(app_identity, 'app_identity')
   @mock.patch.object(taskqueue, 'add')
   def testGetGames_noTriggerCrawl(self, mock_add_queue, mock_app_identity):
@@ -146,6 +149,10 @@ class ScoresApiTest(web_test_base.WebTestBase):
 
     calls = mock_add_queue.mock_calls
     self.assertEquals(1, len(calls))
+
+  def testGetGameInfo(self):
+    """Test basic functionality of GetGameInfo."""
+    pass
 
 
 if __name__ == '__main__':

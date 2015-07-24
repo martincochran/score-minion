@@ -197,7 +197,6 @@ class Game(ndb.Model):
   # Last time the Game was updated.
   last_modified_at = ndb.DateTimeProperty('lm')
 
-
   @classmethod
   def FromProto(cls, proto_obj):
     """Builds a Game object from a protobuf object."""

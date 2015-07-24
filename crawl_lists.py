@@ -364,6 +364,7 @@ class CrawlListHandler(webapp2.RequestHandler):
       game.sources.append(GameSource.FromTweet(twt))
       game.sources.sort(cmp=lambda x,y: cmp(y.update_date_time,
         x.update_date_time))
+      self._MergeTeamsIntoGame(game, teams)
 
   def _FindMostConsistentGame(self, twt, existing_games, added_games, teams,
       division, age_bracket, league):
@@ -404,7 +405,7 @@ class CrawlListHandler(webapp2.RequestHandler):
           # hours it's probably the same game.
           # TODO(NEXT): do something more sophisticated based on the score updates in the game.
           max_game_length = timedelta(hours=MAX_LENGTH_OF_GAME_IN_HOURS)
-          if twt.created_at - game.last_modified_at < max_game_length:
+          if abs(twt.created_at - game.last_modified_at) < max_game_length:
             return (1.0, game)
         
     return (0.0, None)
@@ -425,26 +426,76 @@ class CrawlListHandler(webapp2.RequestHandler):
       determined then the team.score_reporter_id will be set to UNKNOWN_SR_ID
       and no other object properties will be set.
     """
-    if user_map.get(twt.author_id):
-      this_team = Team.FromTwitterUser(user_map.get(twt.author_id))
-    else:
-      # TODO: lookup user name using memcache
-      account_query = tweets.User.query().order(tweets.User.screen_name)
-      account_query = account_query.filter(tweets.User.id_str == twt.author_id)
-      user = account_query.fetch(1)
-      if user:
-        this_team = Team.FromTwitterUser(user[0])
-      else:
-        this_team = Team(score_reporter_id=UNKNOWN_SR_ID)
+    this_team = self._TeamFromAuthorId(twt.author_id, user_map)
 
     # TODO: add logic to handle the case where the author of the tweet is not
     # involved in the game.
 
-    # TODO(NEXT): make some effort to determine the other team, perhaps based on user
-    # account mention.
+    # Try to determine the other team based on user account mention.
     other_team = Team(score_reporter_id=UNKNOWN_SR_ID)
+    if twt.entities and twt.entities.user_mentions:
+      # If there is only one user mention and it's in the db, then likelihood is
+      # high that it's the other team.
+      if len(twt.entities.user_mentions) == 1:
+        other_team = self._TeamFromAuthorId(
+            twt.entities.user_mentions[0].user_id, user_map)
 
+    # TODO(NEXT): double-check that this is a team from the same division and
+    # age bracket, and league.
     return [this_team, other_team]
+
+  def _TeamFromAuthorId(self, author_id, user_map):
+    """Try to build a game_model.Team object from a string user_id.
+
+    Args:
+      author_id: (string) twitter ID of the user account.
+      user_map: map from string user ids to users who have authored a tweet
+        during this crawl cycle.
+    Returns:
+      A game_model.Team object.  If the user ID is not found in the provided
+      user_map or the db then a user with score_reporter_id equal to
+      UNKNOWN_SR_ID is returned.
+    """
+    if user_map.get(author_id):
+      return Team.FromTwitterUser(user_map.get(author_id))
+
+    # TODO: lookup user name using memcache
+    account_query = tweets.User.query().order(tweets.User.screen_name)
+    account_query = account_query.filter(tweets.User.id_str == author_id)
+    user = account_query.fetch(1)
+    if user:
+      return Team.FromTwitterUser(user[0])
+    return Team(score_reporter_id=UNKNOWN_SR_ID)
+
+  def _MergeTeamsIntoGame(self, game, teams):
+    """Merge the teams from the tweet into the game.
+
+    This is intended to handle the case where a tweet mentions another
+    team for the first time.
+
+    Precondition: At least one of the teams in games.teams and teams is
+    the same.
+
+    Returns:
+      Nothing
+    """ 
+    if not game.teams:
+      game.teams = teams
+      return
+
+    # If there are only two teams in the game and one hasn't been identified,
+    # then use the teams parsed from the tweet.
+    if len(game.teams) == 2:
+      for team in game.teams:
+        if team.score_reporter_id == UNKNOWN_SR_ID:
+          game.teams = teams
+          return
+
+    # TODO: consider adding more than two teams to a game and then adding a
+    # second pass to determine which of the two mentioned teams are most
+    # likely to be the two teams in the game. It's possible for a team to
+    # be mentioned at some point during a game, but not a team involved in the
+    # game, to be tagged incorrectly as "the" team in the game.
 
   def _FindScoreIndicies(self, integer_entities, tweet_text):
     """Return the two integer entities referring to the score.

@@ -226,13 +226,15 @@ class TwitterFetcher:
     else:
       try:
         # TODO: check, possibly increase default timeout
-        response = urlfetch.fetch(url, headers=self._BuildHeaders())
+        response = urlfetch.fetch(url, headers=self._BuildHeaders(),
+            deadline=30)
 
         # Check to see if we need to re-authenticate to get a new token.
         if self._ShouldReAuthenticate(response):
           self._ReAuthenticate()
           # Try again, once.
-          response = urlfetch.fetch(url, headers=self._BuildHeaders())
+          response = urlfetch.fetch(url, headers=self._BuildHeaders(),
+              deadline=30)
       except urlfetch.Error as e:
         logging.warning('Could not fetch URL %s: %s', url, e)
         raise FetchError(e)
@@ -338,7 +340,7 @@ class TwitterFetcher:
 
     logging.info('Obtaining new authentication code')
     response = urlfetch.fetch(self.TOKEN_URL, method='POST', payload=content,
-        headers=headers)
+        headers=headers, deadline=30)
 
     token_response = json.loads(response.content)
     self.bearer_token = token_response.get('access_token', '')

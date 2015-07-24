@@ -159,6 +159,7 @@ class ScoresApi(remote.Service):
     response.games = []
     for game in self._LookupMatchingGames(request):
       response.games.append(game.ToProto())
+      # TODO: lookup URL / other info for accounts
       logging.info('returning game: %s', game)
     return response
 

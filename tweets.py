@@ -614,6 +614,9 @@ class User(ndb.Model):
   date_added = ndb.DateTimeProperty('da', auto_now_add=True)
   date_modified = ndb.DateTimeProperty('dm', auto_now=True)
 
+  # The list ID if this user was indexed by getting statuses from a list.
+  from_list = ndb.StringProperty('fl')
+
   # Keep track of which version of the app added this data 
   added_by_app_version = ndb.StringProperty('ver', required=True)
 

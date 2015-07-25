@@ -92,6 +92,7 @@ class ScoresApiTest(web_test_base.WebTestBase):
     game.put()
     self.assertGameDbSize(1)
 
+    # Request with all operators
     request = scores_messages.GamesRequest()
     request.league = scores_messages.League.USAU
     request.division = scores_messages.Division.OPEN
@@ -103,8 +104,28 @@ class ScoresApiTest(web_test_base.WebTestBase):
     self.assertEquals('bob',
         response.games[0].teams[0].twitter_account.screen_name)
 
-    # TODO: add games from other divisions and make sure the search operators
-    # in the request work
+    # Request with no operators
+    request = scores_messages.GamesRequest()
+    response = self.api.GetGames(request)
+    self.assertEquals(1, len(response.games))
+
+    # Request with wrong division operator
+    request = scores_messages.GamesRequest()
+    request.division = scores_messages.Division.MIXED
+    response = self.api.GetGames(request)
+    self.assertEquals(0, len(response.games))
+
+    # Request with wrong league operator
+    request = scores_messages.GamesRequest()
+    request.league = scores_messages.League.AUDL
+    response = self.api.GetGames(request)
+    self.assertEquals(0, len(response.games))
+
+    # Request with wrong age bracket operator
+    request = scores_messages.GamesRequest()
+    request.age_bracket = scores_messages.AgeBracket.MASTERS
+    response = self.api.GetGames(request)
+    self.assertEquals(0, len(response.games))
 
   @mock.patch.object(app_identity, 'app_identity')
   @mock.patch.object(taskqueue, 'add')

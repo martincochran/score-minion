@@ -279,6 +279,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
         'max_id': 9L,
         'since_id': 3L,
         'num_to_crawl': 2L,
+        'total_requests_made': 1,
     }
     self.assertEquals(calls[0], mock.call(
         url='/tasks/crawl_list', method='GET',
@@ -291,12 +292,13 @@ class CrawlListsTest(web_test_base.WebTestBase):
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
 
-    # Crawl one tweet with a recent ID which is after the ID that
+    # Crawl two tweets with a recent ID which is after the ID that
     # should be indexed.
-    self.SetTimelineResponse(self.CreateTweet(10, ('alice', 2)))
+    self.SetTimelineResponse([self.CreateTweet(12, ('alice', 2)),
+      self.CreateTweet(10, ('alice', 2))])
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
-    self.assertTweetDbContents(['10', '3'], '123')
+    self.assertTweetDbContents(['12', '10', '3'], '123')
 
     # This enqueued a crawling request
     calls = mock_add_queue.mock_calls
@@ -308,21 +310,63 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     params = {
         'list_id': '123',
-        'total_crawled': 1L,
+        'total_crawled': 2L,
         'max_id': 10L,
         'since_id': 3L,
         'num_to_crawl': 200L,
+        'total_requests_made': 1,
     }
     response = self.testapp.get(
         '/tasks/crawl_list?%s' % '&'.join(
           ['%s=%s' % (i[0], i[1]) for i in params.iteritems()]))
     self.assertEqual(200, response.status_int)
-    self.assertTweetDbContents(['10', '8', '3'], '123')
+    self.assertTweetDbContents(['12', '10', '8', '3'], '123')
 
     self.assertEquals(1, len(calls))
     self.assertEquals(calls[0], mock.call(
         url='/tasks/crawl_list', method='GET',
         params=params, queue_name='list-statuses'))
+
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlList_stopBackfillOnlyOneCrawled(self, mock_add_queue):
+    # Crawl one tweet with a small ID.
+    self.SetTimelineResponse(self.CreateTweet(3, ('alice', 2)))
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+
+    # Crawl one tweet with a recent ID which is after the ID that
+    # should be indexed.
+    self.SetTimelineResponse(self.CreateTweet(10, ('alice', 2)))
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+    self.assertTweetDbContents(['10', '3'], '123')
+
+    # This did not enqueue a crawling request because only one tweet was
+    # crawled.
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlList_stopBackfillMaxRequests(self, mock_add_queue):
+    # Crawl one tweet with a small ID.
+    self.SetTimelineResponse(self.CreateTweet(3, ('alice', 2)))
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+
+    # Crawl two tweets with a recent ID which is after the ID that
+    # should be indexed.
+    self.SetTimelineResponse([self.CreateTweet(12, ('alice', 2)),
+      self.CreateTweet(10, ('alice', 2))])
+    response = self.testapp.get(
+        '/tasks/crawl_list?list_id=123&total_requests_made=%d' % (
+          crawl_lists.MAX_REQUESTS - 1))
+    self.assertEqual(200, response.status_int)
+    self.assertTweetDbContents(['12', '10', '3'], '123')
+
+    # This did not enqueue a crawling request because the maximum number
+    # of crawl requests has been made.
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
 
   @mock.patch.object(taskqueue, 'add')
   def testCrawlList_simulateCrawlFollowUpEnqueueAnother(self, mock_add_queue):
@@ -342,6 +386,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
         'max_id': 9L,
         'since_id': 3L,
         'num_to_crawl': 2L,
+        'total_requests_made': 1,
     }
     response = self.testapp.get(
         '/tasks/crawl_list?%s' % '&'.join(

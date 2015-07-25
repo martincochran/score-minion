@@ -52,6 +52,10 @@ DEFAULT_RECENT_STATUS_DB_NAME = 'most_recent_status_db'
 # including recrawls.
 MAX_POSTS_TO_CRAWL = 1000L
 
+# Maximum number of total requests that can be made in a crawl attempt of a list,
+# including all recrawls.
+MAX_REQUESTS = 10L
+
 # Num posts to retrieve on each crawl attempt.
 POSTS_TO_RETRIEVE = 200L
 
@@ -170,7 +174,8 @@ class CrawlListHandler(webapp2.RequestHandler):
 
     last_tweet_id = self._LookupLatestTweet(list_id)
     since_id = self._ParseLongParam('since_id')
-    max_id =  self._ParseLongParam('max_id')
+    max_id = self._ParseLongParam('max_id')
+    total_requests_made = self._ParseLongParam('total_requests_made')
     num_to_crawl = self._ParseLongParam('num_to_crawl')
     if not num_to_crawl:
       num_to_crawl = POSTS_TO_RETRIEVE
@@ -255,7 +260,8 @@ class CrawlListHandler(webapp2.RequestHandler):
     num_crawled = len(json_obj)
     total_crawled = self._ParseLongParam('total_crawled')
     self._PossiblyEnqueueMoreCrawling(list_id, last_tweet_id, oldest_incoming_tweet,
-        num_crawled, num_to_crawl, num_crawled + total_crawled)
+        num_crawled, num_to_crawl, num_crawled + total_crawled,
+        total_requests_made + 1)
 
     # Update the value of most recent tweet.
     self._UpdateLatestTweet(latest_incoming_tweet, list_id)
@@ -264,7 +270,8 @@ class CrawlListHandler(webapp2.RequestHandler):
     self.response.write('Added %s tweets to db' % num_crawled)
 
   def _PossiblyEnqueueMoreCrawling(self, list_id, tweet_in_db_id,
-      oldest_incoming_tweet, num_tweets_crawled, num_requested, total_crawled):
+      oldest_incoming_tweet, num_tweets_crawled, num_requested, total_crawled,
+      total_requests_made):
     """Enqueue more tweet crawling if we haven't processed all stream updates.
 
     Args:
@@ -276,6 +283,8 @@ class CrawlListHandler(webapp2.RequestHandler):
       total_crawled: Total number of tweets crawled during this crawl attempt,
         including repeated calls to enqueue more crawl requests that resulted
         from the original crawl request.
+      total_requests_made: Total number of requests made trying to crawl this
+        list.
     Returns:
       Any tasks that were enqueued.
     """
@@ -284,6 +293,7 @@ class CrawlListHandler(webapp2.RequestHandler):
     logging.debug('num_tweets_crawled: %s', num_tweets_crawled)
     logging.debug('num_requested: %s', num_requested)
     logging.debug('total_crawled: %s', total_crawled)
+    logging.debug('total_requests_made: %s', total_requests_made)
     # If no tweets were in the stream, then there are no more to crawl.
     if not oldest_incoming_tweet:
       return None
@@ -304,12 +314,25 @@ class CrawlListHandler(webapp2.RequestHandler):
     if tweet_in_db_id + 1 == FIRST_TWEET_IN_STREAM_ID:
       return None
 
+    # Don't crawl more if we only crawled one this turn. This works around a
+    # behavior of the Twitter API that appears to cap the number of historical
+    # tweets you can retrieve from a given list.
+    if total_crawled <= 1:
+      logging.info('Only 1 tweet crawled this iteration - stopping backfill')
+      return None
+
+    if total_requests_made >= MAX_REQUESTS:
+      logging.info('Backfill reached limit of %s total API requests',
+          MAX_REQUESTS)
+      return None
+
     params = {
         'list_id': list_id,
         'total_crawled': total_crawled,
         'max_id': long(oldest_incoming_tweet.id_str),
         'since_id': tweet_in_db_id + 1,
         'num_to_crawl': num_requested,
+        'total_requests_made': total_requests_made,
     }
 
     logging.info('More tweets in update than fetched - enqueuing another task')

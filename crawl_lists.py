@@ -317,7 +317,7 @@ class CrawlListHandler(webapp2.RequestHandler):
     # Don't crawl more if we only crawled one this turn. This works around a
     # behavior of the Twitter API that appears to cap the number of historical
     # tweets you can retrieve from a given list.
-    if total_crawled <= 1:
+    if num_tweets_crawled <= 1:
       logging.info('Only 1 tweet crawled this iteration - stopping backfill')
       return None
 

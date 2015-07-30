@@ -139,6 +139,79 @@ class UpdateListsRateLimitedHandler(webapp2.RequestHandler):
     self.response.write(msg)
 
 
+class CrawlState():
+  """Contains all data about the state of the crawl for a given list."""
+
+  def __init__(self, list_id, total_crawled, max_id, total_requests_made,
+      num_to_crawl, last_tweet_id):
+    """Initializes the CrawlState with data about the crawl.
+
+    Args:
+      list_id: List ID requested to be crawled.
+      total_crawled: Total # of tweets crawled so far, including recrawls.
+      max_id: Maximum ID to crawl, which is passed to the Twitter API when
+        further requests are triggered. It's an optimization so the API will
+        only return tweets with an ID lower than that.
+      total_requests_made: Total # of API requests made during this crawl cycle
+        for this list.
+      num_to_crawl: Maximum number of tweets to crawl this cycle across all API
+        requests
+      last_tweet_id: Minimum ID to crawl, which is passed to the Twitter API as an
+        optimization to only return tweets with an ID higher than that.
+    """
+    self.list_id = list_id
+    self.total_crawled = total_crawled
+    self.max_id = max_id
+    self.total_requests_made = total_requests_made
+    self.num_to_crawl = num_to_crawl or POSTS_TO_RETRIEVE
+
+    # Decrement the last tweet by 1 so that we always get the last
+    # tweet in the response.  This is how we know we're caught up in the
+    # stream. This is required because the API may not return 'count' number
+    # of tweets since it will filter duplicates after retrieving 'count' from
+    # the backend.
+    self.last_tweet_id = last_tweet_id - 1
+
+  @classmethod
+  def FromRequest(cls, request, last_tweet_id):
+    """Initialize the crawl state from the webapp2 request.
+
+    Args:
+      request: webapp2 request object
+      last_tweet_id: Last tweet ID crawled for this list.
+    Returns:
+      A CrawlState object initialized with fields from the parameters
+      encoded in the request.
+    """
+    since_id = CrawlState._ParseLongParam(request, 'since_id')
+    if since_id:
+      last_tweet_id = since_id
+    return CrawlState(
+        request.get('list_id'),
+        CrawlState._ParseLongParam(request, 'total_crawled'),
+        CrawlState._ParseLongParam(request, 'max_id'),
+        CrawlState._ParseLongParam(request, 'total_requests_made'),
+        CrawlState._ParseLongParam(request, 'num_to_crawl'),
+        last_tweet_id)
+
+  @classmethod
+  def _ParseLongParam(cls, request, param_name, default_value=0L):
+    """Parse and return a parameter as an integer.
+
+    Args:
+      request: incoming request object
+      param_name: The name of the parameter.
+      default_value: Long default value to return.
+    Returns:
+      The parsed integer value, or the default value if it cannot be parsed.
+    """
+    try:
+      return long(request.get(param_name, default_value=str(default_value)))
+    except ValueError as e:
+      logging.debug('Could not parse value for param %s, value %s, default %s',
+          param_name, request.get(param_name), default_value)
+      return default_value
+
 class CrawlAllListsHandler(webapp2.RequestHandler):
   def get(self):
     admin_list_result = ManagedLists.query(ancestor=lists_key()).fetch(1)
@@ -169,70 +242,69 @@ class CrawlListHandler(webapp2.RequestHandler):
       self.response.write(msg)
       return
 
-    token_manager = oauth_token_manager.OauthTokenManager()
-    fetcher = twitter_fetcher.TwitterFetcher(token_manager)
-
     last_tweet_id = self._LookupLatestTweet(list_id)
-    since_id = self._ParseLongParam('since_id')
-    max_id = self._ParseLongParam('max_id')
-    total_requests_made = self._ParseLongParam('total_requests_made')
-    num_to_crawl = self._ParseLongParam('num_to_crawl')
-    if not num_to_crawl:
-      num_to_crawl = POSTS_TO_RETRIEVE
-    if since_id:
-      last_tweet_id = since_id
-
-    # Decrement the last tweet by 1 so that we always get the last
-    # tweet in the response.  This is how we know we're caught up in the
-    # stream. This is required because the API may not return 'count' number
-    # of tweets since it will filter duplicates after retrieving 'count' from
-    # the backend.
-    last_tweet_id = last_tweet_id - 1
-
+    crawl_state = CrawlState.FromRequest(self.request, last_tweet_id)
+    
     # In parallel: look-up the latest set of games for this
     # division and cache it
-    games_query = Game.query().order(-Game.last_modified_at)
-
     division, age_bracket, league = list_id_bimap.ListIdBiMap.GetStructuredPropertiesForList(
-        list_id)
-    games_query = games_query.filter(Game.division == division)
-    games_query = games_query.filter(Game.age_bracket == age_bracket)
-    games_query = games_query.filter(Game.league == league)
-
+        crawl_state.list_id)
     # Only pull up games for the last two weeks.
     # TODO: run a separate query for games populated from score reporter, which
     # may have been created weeks before the actual game.
-    now = datetime.utcnow()
-    games_query = games_query.filter(Game.last_modified_at > now - timedelta(weeks=2))
-
+    games_query = Game.query(Game.division == division,
+        Game.age_bracket == age_bracket,
+        Game.league == league,
+        Game.last_modified_at > datetime.utcnow() - timedelta(weeks=2)).order(
+            -Game.last_modified_at)
     games_future = games_query.fetch_async()
 
+    token_manager = oauth_token_manager.OauthTokenManager()
+    fetcher = twitter_fetcher.TwitterFetcher(token_manager)
     try:
-      json_obj = fetcher.ListStatuses(list_id, count=num_to_crawl,
-          since_id=last_tweet_id, max_id=max_id,
+      json_obj = fetcher.ListStatuses(crawl_state.list_id, count=crawl_state.num_to_crawl,
+          since_id=crawl_state.last_tweet_id, max_id=crawl_state.max_id,
           fake_data=self.request.get('fake_data'))
     except twitter_fetcher.FetchError as e:
-      msg = 'Could not fetch statuses for list %s' % list_id
+      msg = 'Could not fetch statuses for list %s' % crawl_state.list_id
       logging.warning('%s: %s', msg, e)
       self.response.write(msg)
 
       # TODO: retry the request a fixed # of times
       return
 
+    # Update the various datastores.
+    twts, users = self.UpdateTweetDbWithNewTweets(json_obj, crawl_state)
     existing_games = games_future.get_result()
+    self.UpdateGames(twts, existing_games, users, division, age_bracket, league)
+    # TODO(NEXT): Consider merging the games if they are appropriately consistent.
 
-    # This will keep track of games that we add during processing of these tweets.
-    added_games = []
+  def UpdateTweetDbWithNewTweets(self, json_obj, crawl_state):
+    """Update the Tweet DB with the newly-fetched tweets.
 
-    users = {}
-    
+    Args:
+      json_obj: The parsed JSON object from the API response.
+      crawl_state: State of the crawl for this list.
+    Returns:
+      A 2-tuple. The first item is the list of tweets.Tweet objects that were
+      added to the datastore and the second is a dictionary mapping string
+      user ids to the tweets.User objects for all authors of tweets in this
+      crawl cycle.
+    """
+    # TODO: If a user is new this cycle and more crawling is enqueued, the
+    # team might not be populated. The Game creation code should look up
+    # users with the key that guarantees consistency instead of doing a search.
+
     # Keep track of the first tweet in the list for bookkeeping purposes.
     latest_incoming_tweet = None
     oldest_incoming_tweet = None
+    twts = []
+    users = {}
     for json_twt in json_obj:
       # TODO: consider writing all of these at the same time / in one transaction, possibly
       # in the same transaction that updates all the games as well.
-      twt = tweets.Tweet.getOrInsertFromJson(json_twt, from_list=list_id)
+      twt = tweets.Tweet.getOrInsertFromJson(json_twt,
+          from_list=crawl_state.list_id)
       if not latest_incoming_tweet:
         latest_incoming_tweet = twt
       if not twt:
@@ -244,30 +316,50 @@ class CrawlListHandler(webapp2.RequestHandler):
       if model_user and not users.get(model_user.id_str, None):
         users[model_user.id_str] = model_user
 
-      self._PossiblyAddTweetToGame(twt, existing_games, added_games, users,
-          division, age_bracket, league)
       oldest_incoming_tweet = twt
-
+      twts.append(twt)
       tweets.User.getOrInsertFromJson(json_twt.get('user', {}))
 
-    # TODO(NEXT): Consider merging the games if they are appropriately consistent.
+    num_crawled = len(json_obj)
+    self._PossiblyEnqueueMoreCrawling(crawl_state.list_id,
+        crawl_state.last_tweet_id, oldest_incoming_tweet,
+        num_crawled, crawl_state.num_to_crawl,
+        num_crawled + crawl_state.total_crawled,
+        crawl_state.total_requests_made + 1)
+
+    # Update the value of most recent tweet.
+    self._UpdateLatestTweet(latest_incoming_tweet, crawl_state.list_id)
+
+    logging.info('Added %s tweets to db for list %s', num_crawled,
+        crawl_state.list_id)
+    self.response.write('Added %s tweets to db' % num_crawled)
+ 
+    return (twts, users)
+
+  def UpdateGames(self, twts, existing_games, users, division, age_bracket,
+      league):
+    """Update the datastore with the game information in the given tweets.
+
+    Args:
+      twts: list of tweets.Tweet objects
+      existing_games: list of game_model.Game objects already in the datastore
+      users: dictionary from user ids to tweets.User objects for authors of all
+        the tweets in twts
+      division: Division of tweets
+      age_bracket: AgeBracket of tweets
+      league: League of tweets
+    """
+    # This will keep track of games added during processing of these tweets.
+    added_games = []
+
+    for twt in twts:
+      self._PossiblyAddTweetToGame(twt, existing_games, added_games, users,
+          division, age_bracket, league)
 
     # Update the games
     # TOOD: consider doing this in one transaction to save time
     for game in existing_games + added_games:
       game.put()
-
-    num_crawled = len(json_obj)
-    total_crawled = self._ParseLongParam('total_crawled')
-    self._PossiblyEnqueueMoreCrawling(list_id, last_tweet_id, oldest_incoming_tweet,
-        num_crawled, num_to_crawl, num_crawled + total_crawled,
-        total_requests_made + 1)
-
-    # Update the value of most recent tweet.
-    self._UpdateLatestTweet(latest_incoming_tweet, list_id)
-
-    logging.info('Added %s tweets to db for list %s', num_crawled, list_id)
-    self.response.write('Added %s tweets to db' % num_crawled)
 
   def _PossiblyEnqueueMoreCrawling(self, list_id, tweet_in_db_id,
       oldest_incoming_tweet, num_tweets_crawled, num_requested, total_crawled,
@@ -605,24 +697,8 @@ class CrawlListHandler(webapp2.RequestHandler):
       return long(twts[0].id_str)
 
     return FIRST_TWEET_IN_STREAM_ID
+  
  
-  def _ParseLongParam(self, param_name, default_value=0L):
-    """Parse and return a parameter as an integer.
-
-    Args:
-      param_name: The name of the parameter.
-      default_value: Long default value to return.
-    Returns:
-      The parsed integer value, or the default value if it cannot be parsed.
-    """
-    try:
-      return long(self.request.get(param_name, default_value=str(default_value)))
-    except ValueError as e:
-      logging.debug('Could not parse value for param %s, value %s, default %s',
-          param_name, self.request.get(param_name), default_value)
-      return default_value
-
-
 app = webapp2.WSGIApplication([
   ('/tasks/update_lists', UpdateListsHandler),
   ('/tasks/update_lists_rate_limited', UpdateListsRateLimitedHandler),

@@ -316,16 +316,20 @@ class CrawlListsTest(web_test_base.WebTestBase):
         'num_to_crawl': 200L,
         'total_requests_made': 1,
     }
+    self.assertEquals(calls[0], mock.call(
+        url='/tasks/crawl_list', method='GET',
+        params=params, queue_name='list-statuses'))
+
+    # Reset the mock and make the request as if it was initiated by the queue.
+    mock_add_queue.mock_calls = []
     response = self.testapp.get(
         '/tasks/crawl_list?%s' % '&'.join(
           ['%s=%s' % (i[0], i[1]) for i in params.iteritems()]))
     self.assertEqual(200, response.status_int)
     self.assertTweetDbContents(['12', '10', '8', '3'], '123')
 
-    self.assertEquals(1, len(calls))
-    self.assertEquals(calls[0], mock.call(
-        url='/tasks/crawl_list', method='GET',
-        params=params, queue_name='list-statuses'))
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
 
   @mock.patch.object(taskqueue, 'add')
   def testCrawlList_stopBackfillOnlyOneCrawled(self, mock_add_queue):
@@ -334,15 +338,43 @@ class CrawlListsTest(web_test_base.WebTestBase):
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
 
-    # Crawl one tweet with a recent ID which is after the ID that
+    # Crawl two tweets with a recent ID which is after the ID that
     # should be indexed.
-    self.SetTimelineResponse(self.CreateTweet(10, ('alice', 2)))
+    self.SetTimelineResponse([self.CreateTweet(12, ('alice', 2)),
+      self.CreateTweet(10, ('alice', 2))])
     response = self.testapp.get('/tasks/crawl_list?list_id=123')
     self.assertEqual(200, response.status_int)
-    self.assertTweetDbContents(['10', '3'], '123')
+    self.assertTweetDbContents(['12', '10', '3'], '123')
 
-    # This did not enqueue a crawling request because only one tweet was
-    # crawled.
+    # This enqueued a crawling request
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(1, len(calls))
+
+    # Simulate crawling 1 more.
+    self.SetTimelineResponse([self.CreateTweet(8, ('alice', 2))])
+
+    params = {
+        'list_id': '123',
+        'total_crawled': 2L,
+        'max_id': 10L,
+        'since_id': 3L,
+        'num_to_crawl': 200L,
+        'total_requests_made': 1,
+    }
+    self.assertEquals(calls[0], mock.call(
+        url='/tasks/crawl_list', method='GET',
+        params=params, queue_name='list-statuses'))
+
+    # Reset the mock and make the request as if it was initiated by the queue.
+    mock_add_queue.mock_calls = []
+    response = self.testapp.get(
+        '/tasks/crawl_list?%s' % '&'.join(
+          ['%s=%s' % (i[0], i[1]) for i in params.iteritems()]))
+    self.assertEqual(200, response.status_int)
+    self.assertTweetDbContents(['12', '10', '8', '3'], '123')
+
+    # Even though the original tweet '3' was not returned, we shouldn't have
+    # enqueued more because only one tweet was crawled.
     calls = mock_add_queue.mock_calls
     self.assertEquals(0, len(calls))
 

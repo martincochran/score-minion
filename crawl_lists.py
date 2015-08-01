@@ -212,6 +212,7 @@ class CrawlState():
           param_name, request.get(param_name), default_value)
       return default_value
 
+
 class CrawlAllListsHandler(webapp2.RequestHandler):
   def get(self):
     admin_list_result = ManagedLists.query(ancestor=lists_key()).fetch(1)
@@ -232,6 +233,120 @@ class CrawlAllListsHandler(webapp2.RequestHandler):
     self.response.write(msg)
 
 
+class BackfillGamesHandler(webapp2.RequestHandler):
+  """Handler to update prior games / do data cleanup."""
+  def get(self):
+    """Adds backfill requests to the crawl queue."""
+    admin_list_result = ManagedLists.query(ancestor=lists_key()).fetch(1)
+    if not admin_list_result:
+      msg = 'No lists to backfill'
+      logging.warning(msg)
+      self.response.write(msg)
+      return
+
+    duration = self._ParseDuration(self.request.get('duration'))
+    if not duration:
+      msg = 'Invalid duration format. Examples: "3w", "4m"'
+      logging.warning(msg)
+      self.response.write(msg)
+      return
+
+    start_date = ParseDate(self.request.get('start_date'))
+    if self.request.get('start_date') and not start_date:
+      msg = 'Invalid start_date format. Example: "11/16/2014"'
+      logging.warning(msg)
+      self.response.write(msg)
+      return
+    if not start_date:
+      start_date = datetime.utcnow()
+
+    backfill_dates = self._GenerateBackfillDates(duration, start_date)
+    # For every list, enqueue a task to crawl that list.
+    for l in admin_list_result[0].list_ids:
+      for backfill_date in backfill_dates:
+        taskqueue.add(url='/tasks/crawl_list', method='GET',
+            params={
+                'list_id': l,
+                'backfill_date': backfill_date.strftime(DATE_PARSE_STRF)
+            },
+            queue_name='game-backfill')
+
+    msg = 'Enqueued backfill requests for lists %s for dates %s' % (
+        admin_list_result[0].list_ids, backfill_dates)
+    logging.debug(msg)
+    self.response.write(msg)
+
+  def _GenerateBackfillDates(self, duration, start_date):
+    """Generates target dates for a week's worth of backfill.
+
+    Args:
+      duration: timedelta object
+      start_date: date backfill should start
+    Returns:
+      A list of datetime objects at weekly increments, Wednesday to Tuesday,
+      starting before the start_date and ending before start_date - duration.
+    """
+    # First find the nearest Wednesday before the start.
+    crawl_date = start_date - timedelta(days=((start_date.weekday() + 5) % 7))
+    days = []
+    while crawl_date > start_date - duration:
+      days.append(crawl_date)
+      crawl_date = crawl_date - timedelta(weeks=1)
+    return days
+
+  def _ParseDuration(self, duration_param):
+    """Parses the duration from the request parameter.
+
+    Args:
+      duration_param: Parameter from the request object
+
+    Returns:
+      A timedelta object if the param could be successfully parsed.
+    """
+    if not duration_param:
+      return None
+    if duration_param[-1] not in ['w', 'm']:
+      return None
+    unit = duration_param[-1]
+    try:
+      num = int(duration_param[:-1])
+    except ValueError as e:
+      logging.error('Could not parse duration parameter: %s', e)
+      return None
+    if num < 1:
+      logging.error('Non-positive duration specified: %d', num)
+      return None
+    if unit == 'w':
+      if num > 26:
+        logging.error('Backfill period too long: %d weeks', num)
+        return None
+      return timedelta(weeks=num)
+    else:
+      if num > 6:
+        logging.error('Backfill period too long: %d months', num)
+        return None
+      return timedelta(weeks=4*num)
+
+
+DATE_PARSE_STRF = '%m/%d/%Y'
+
+
+def ParseDate(date_param):
+  """Parses a date from the request parameter.
+
+  Args:
+    date_param: Parameter from the request object
+
+  Returns:
+    A datetime object if the param could be successfully parsed.
+  """
+  try:
+    return datetime.strptime(date_param, DATE_PARSE_STRF)
+  except ValueError as e:
+    logging.warning('Failed to parse date from param')
+    return None
+
+
 class CrawlListHandler(webapp2.RequestHandler):
   """Crawls the new statuses from a pre-defined list."""
   def get(self):
@@ -242,6 +357,7 @@ class CrawlListHandler(webapp2.RequestHandler):
       self.response.write(msg)
       return
 
+
     last_tweet_id = self._LookupLatestTweet(list_id)
     crawl_state = CrawlState.FromRequest(self.request, last_tweet_id)
     
@@ -249,32 +365,52 @@ class CrawlListHandler(webapp2.RequestHandler):
     # division and cache it
     division, age_bracket, league = list_id_bimap.ListIdBiMap.GetStructuredPropertiesForList(
         crawl_state.list_id)
+
+    backfill_date = ParseDate(self.request.get('backfill_date'))
+    games_start = datetime.utcnow()
+    if backfill_date:
+      games_start = backfill_date + timedelta(weeks=1)
+      # Query tweets for that week for this list
+      tweet_query = tweets.Tweet.query(
+          tweets.Tweet.from_list == list_id,
+          tweets.Tweet.created_at > games_start - timedelta(weeks=1),
+          tweets.Tweet.created_at < games_start).order(
+          ).order(-tweets.Tweet.created_at)
+      twts_future = tweet_query.fetch_async()
+
     # Only pull up games for the last two weeks.
     # TODO: run a separate query for games populated from score reporter, which
     # may have been created weeks before the actual game.
     games_query = Game.query(Game.division == division,
         Game.age_bracket == age_bracket,
         Game.league == league,
-        Game.last_modified_at > datetime.utcnow() - timedelta(weeks=2)).order(
+        Game.last_modified_at > games_start - timedelta(weeks=1),
+        Game.last_modified_at < games_start).order(
             -Game.last_modified_at)
     games_future = games_query.fetch_async()
 
-    token_manager = oauth_token_manager.OauthTokenManager()
-    fetcher = twitter_fetcher.TwitterFetcher(token_manager)
-    try:
-      json_obj = fetcher.ListStatuses(crawl_state.list_id, count=crawl_state.num_to_crawl,
-          since_id=crawl_state.last_tweet_id, max_id=crawl_state.max_id,
-          fake_data=self.request.get('fake_data'))
-    except twitter_fetcher.FetchError as e:
-      msg = 'Could not fetch statuses for list %s' % crawl_state.list_id
-      logging.warning('%s: %s', msg, e)
-      self.response.write(msg)
+    if not backfill_date:
+      token_manager = oauth_token_manager.OauthTokenManager()
+      fetcher = twitter_fetcher.TwitterFetcher(token_manager)
+      try:
+        json_obj = fetcher.ListStatuses(crawl_state.list_id, count=crawl_state.num_to_crawl,
+            since_id=crawl_state.last_tweet_id, max_id=crawl_state.max_id,
+            fake_data=self.request.get('fake_data'))
+      except twitter_fetcher.FetchError as e:
+        msg = 'Could not fetch statuses for list %s' % crawl_state.list_id
+        logging.warning('%s: %s', msg, e)
+        self.response.write(msg)
 
-      # TODO: retry the request a fixed # of times
-      return
+        # TODO: retry the request a fixed # of times
+        return
 
-    # Update the various datastores.
-    twts, users = self.UpdateTweetDbWithNewTweets(json_obj, crawl_state)
+      # Update the various datastores.
+      twts, users = self.UpdateTweetDbWithNewTweets(json_obj, crawl_state)
+
+    if backfill_date:
+      twts = twts_future.get_result()
+      users = {}
+
     existing_games = games_future.get_result()
     self.UpdateGames(twts, existing_games, users, division, age_bracket, league)
     # TODO(NEXT): Consider merging the games if they are appropriately consistent.
@@ -352,6 +488,8 @@ class CrawlListHandler(webapp2.RequestHandler):
     # This will keep track of games added during processing of these tweets.
     added_games = []
 
+    logging.info('UpdateGames: %d tweets, %d existing games',
+        len(twts), len(existing_games))
     for twt in twts:
       self._PossiblyAddTweetToGame(twt, existing_games, added_games, users,
           division, age_bracket, league)
@@ -519,6 +657,7 @@ class CrawlListHandler(webapp2.RequestHandler):
           # So one of the teams is the same. If this game happened within the last few
           # hours it's probably the same game.
           # TODO(NEXT): do something more sophisticated based on the score updates in the game.
+          # eg, even if the tweet already exists in some game this might add it again.
           max_game_length = timedelta(hours=MAX_LENGTH_OF_GAME_IN_HOURS)
           if abs(twt.created_at - game.last_modified_at) < max_game_length:
             return (1.0, game)
@@ -702,6 +841,7 @@ class CrawlListHandler(webapp2.RequestHandler):
 app = webapp2.WSGIApplication([
   ('/tasks/update_lists', UpdateListsHandler),
   ('/tasks/update_lists_rate_limited', UpdateListsRateLimitedHandler),
+  ('/tasks/backfill_games', BackfillGamesHandler),
   ('/tasks/crawl_list', CrawlListHandler),
   ('/tasks/crawl_all_lists', CrawlAllListsHandler),
 ], debug=True)

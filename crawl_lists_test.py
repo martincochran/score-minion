@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-import datetime
+from datetime import date, datetime, timedelta
 import mock
 import unittest
 import webtest
@@ -133,9 +133,9 @@ class CrawlListsTest(web_test_base.WebTestBase):
     
   @mock.patch.object(taskqueue, 'add')
   def testCrawlList_allNewTweets(self, mock_add_queue):
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     fake_tweets = [
-        self.CreateTweet(4, ('alice', 3), created_at=now + datetime.timedelta(1, 0, 0)),
+        self.CreateTweet(4, ('alice', 3), created_at=now + timedelta(1, 0, 0)),
         self.CreateTweet(1, ('bob', 2), created_at=now)
     ]
     self.SetTimelineResponse(list(fake_tweets))
@@ -161,7 +161,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
   @mock.patch.object(taskqueue, 'add')
   def testCrawlList_tweetsWithGames(self, mock_add_queue):
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     fake_tweets = [
         self.CreateTweet(4, ('alice', 3), text='5-7', created_at=now),
         self.CreateTweet(1, ('bob', 2), text='3-5', created_at=now)
@@ -561,7 +561,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     user = self.CreateUser(2, 'bob')
 
     crawl_lists_handler = crawl_lists.CrawlListHandler()
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     twt = self.CreateTweet(1, ('bob', 2), created_at=now)
 
     # The first team will be 'bob'
@@ -586,7 +586,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     user.put()
 
     crawl_lists_handler = crawl_lists.CrawlListHandler()
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
 
     # Create a tweet for a different user than the one in the game.
     twt = self.CreateTweet(1, ('alice', 3), created_at=now)
@@ -618,7 +618,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     user.put()
 
     crawl_lists_handler = crawl_lists.CrawlListHandler()
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     twt = self.CreateTweet(1, ('bob', 2), created_at=now)
 
     # The first team will be 'bob'
@@ -626,7 +626,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     # Create a game with 'bob' in that division, age_bracket, and league, but with
     # an old date.
-    creation_date = now - datetime.timedelta(
+    creation_date = now - timedelta(
         hours=crawl_lists.MAX_LENGTH_OF_GAME_IN_HOURS + 1)
     game = Game(id_str='new game', teams=teams, scores=[5, 7],
         division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
@@ -726,7 +726,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     user = self.CreateUser(2, 'bob')
     user.put()
 
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     twt = self.CreateTweet(1, ('bob', 2), created_at=now)
 
     # The first team will be 'bob'
@@ -772,7 +772,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
         '4': self.CreateUser(3, 'eve'),
     }
 
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     twt = self.CreateTweet(1, ('bob', 2), created_at=now)
 
     # The first team will be 'bob' and the second will be 'unknown'.
@@ -827,7 +827,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     user = self.CreateUser(2, 'bob')
     user.put()
 
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     twt = self.CreateTweet(1, ('bob', 2), created_at=now)
 
     # The first team will be 'bob'
@@ -863,6 +863,122 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     # The sources length should be unchanged
     self.assertEquals(sources_length + 1, len(game.sources))
+
+  def testBackfill_parseDuration(self):
+    """Ensure parsing of the data parameter is done correctly."""
+    backfill_handler = crawl_lists.BackfillGamesHandler()
+
+    # Bad input formats.
+    self.assertIsNone(backfill_handler._ParseDuration('5'))
+    self.assertIsNone(backfill_handler._ParseDuration('w'))
+    self.assertIsNone(backfill_handler._ParseDuration('m'))
+    self.assertIsNone(backfill_handler._ParseDuration('5s'))
+    self.assertIsNone(backfill_handler._ParseDuration('5d'))
+    self.assertIsNone(backfill_handler._ParseDuration('5y'))
+    self.assertIsNone(backfill_handler._ParseDuration('ww'))
+
+    # Too long of a duration.
+    self.assertIsNone(backfill_handler._ParseDuration('7m'))
+    self.assertIsNone(backfill_handler._ParseDuration('50w'))
+
+    # Non-positive durations.
+    self.assertIsNone(backfill_handler._ParseDuration('-2w'))
+    self.assertIsNone(backfill_handler._ParseDuration('0w'))
+
+    self.assertEqual(timedelta(weeks=5), backfill_handler._ParseDuration('5w'))
+    self.assertEqual(timedelta(weeks=12), backfill_handler._ParseDuration('3m'))
+
+  def testParseDate(self):
+    """Ensure parsing of the date parameter is done correctly."""
+    # Bad input format.
+    self.assertIsNone(crawl_lists.ParseDate('not valid'))
+
+    parsed_date = crawl_lists.ParseDate('01/10/2015')
+    self.assertEqual(2015, parsed_date.year)
+    self.assertEqual(1, parsed_date.month)
+    self.assertEqual(10, parsed_date.day)
+
+  def testGenerateBackfillDates(self):
+    """Verify generation of backfill dates works as expected."""
+    backfill_handler = crawl_lists.BackfillGamesHandler()
+
+    duration = timedelta(weeks=5)
+
+    # Doomsday for 2015 is Saturday
+    start_date = datetime(2015, 2, 28)
+
+    days = backfill_handler._GenerateBackfillDates(duration, start_date)
+    self.assertEqual(5, len(days))
+
+    # The first date should be the closest Wednesday
+    first_date = start_date - timedelta(days=3)
+    self.assertEqual(first_date, days[0])
+
+    for i in range(1, 5):
+      self.assertEqual(first_date - timedelta(weeks=i), days[i])
+
+  @mock.patch.object(taskqueue, 'add')
+  def testBackfillGames_badInputs(self, mock_add_queue):
+    """Test handling of various error conditions on backfill games."""
+    # Add a couple lists to the database.
+    self.SetJsonResponse('{"lists": [{"id_str": "1234"}, {"id_str": "87"}]}')
+    self.testapp.get('/tasks/update_lists_rate_limited')
+
+    response = self.testapp.get('/tasks/backfill_games')
+    self.assertEqual(200, response.status_int)
+
+    response = self.testapp.get('/tasks/backfill_games?duration=ww')
+    self.assertEqual(200, response.status_int)
+
+    response = self.testapp.get('/tasks/backfill_games?start_date=02/28/2015')
+    self.assertEqual(200, response.status_int)
+
+    response = self.testapp.get(
+        '/tasks/backfill_games?duration=1m&start_date=hey')
+    self.assertEqual(200, response.status_int)
+
+    self.assertEquals(0, len(mock_add_queue.mock_calls))
+
+  @mock.patch.object(taskqueue, 'add')
+  def testBackfillGames_validInputs(self, mock_add_queue):
+    """Test backfill when correct inputs are specified."""
+    # Add a couple lists to the database.
+    self.SetJsonResponse('{"lists": [{"id_str": "1234"}, {"id_str": "87"}]}')
+    self.testapp.get('/tasks/update_lists_rate_limited')
+
+    response = self.testapp.get('/tasks/backfill_games?duration=1w')
+    self.assertEqual(200, response.status_int)
+    self.assertEquals(2, len(mock_add_queue.mock_calls))
+
+    # TODO: assert the call has the date formatted correctly.
+
+    mock_add_queue.mock_calls = []
+    response = self.testapp.get(
+        '/tasks/backfill_games?duration=5w&start_date=02/28/2015')
+    self.assertEqual(200, response.status_int)
+    self.assertEquals(10, len(mock_add_queue.mock_calls))
+
+  def testBackfillGames(self):
+    """Sanity test for backfilling Games from the Tweet db."""
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+
+    # Add a tweet to the db
+    creation_date = datetime(2015, 2, 28)
+    self.CreateTweet(1, ('bob', 2), text='5-7', created_at=creation_date,
+        list_id='123').put()
+    self.CreateUser(2, 'bob').put()
+
+    creation_date_str = (creation_date - timedelta(days=3)).strftime('%m/%d/%Y')
+    response = self.testapp.get(
+        '/tasks/crawl_list?list_id=123&backfill_date=%s' % creation_date_str)
+    self.assertEqual(200, response.status_int)
+    self.assertGameDbSize(1)
+    
+    # Backfill again - should still only be one game.
+    response = self.testapp.get(
+        '/tasks/crawl_list?list_id=123&backfill_date=%s' % creation_date_str)
+    self.assertEqual(200, response.status_int)
+    self.assertGameDbSize(1)
 
 
 if __name__ == '__main__':

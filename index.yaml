@@ -66,6 +66,12 @@ indexes:
 - kind: Tweet
   properties:
   - name: fl
+  - name: cd
+    direction: desc
+
+- kind: Tweet
+  properties:
+  - name: fl
   - name: id
     direction: desc
 

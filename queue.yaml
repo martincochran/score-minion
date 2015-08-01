@@ -11,3 +11,7 @@ queue:
 # /lists/ownerships.json
 - name: list-lists
   rate: 1/m
+
+# Backfill / processing queues
+- name: game-backfill
+  rate: 1/s

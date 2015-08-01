@@ -1,5 +1,5 @@
 application: omega-bearing-780
-version: alpha-000-041
+version: alpha-000-042
 runtime: python27
 api_version: 1
 threadsafe: no
@@ -42,6 +42,10 @@ handlers:
   login: admin
 
 - url: /tasks/update_lists.*
+  script: crawl_lists.app
+  login: admin
+  
+- url: /tasks/backfill.*
   script: crawl_lists.app
   login: admin
 

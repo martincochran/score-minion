@@ -66,7 +66,7 @@ class WebTestBase(unittest.TestCase):
 
   @classmethod
   def CreateTweet(cls, id_str, user_screen_name_and_id, text='',
-      created_at=None):
+      created_at=None, list_id=None):
     """Convience method to create a Tweet object with minimal required fields.
     
     Args:
@@ -74,6 +74,7 @@ class WebTestBase(unittest.TestCase):
       user_screen_name_and_id: Pair of screen_name and id_str of user
       text: Text of tweet.
       created_at: datetime of when Tweet was created.
+      list_id: List ID this was tweet was crawled from.
     Returns:
       A Tweet object with these required fields.
     """
@@ -91,7 +92,7 @@ class WebTestBase(unittest.TestCase):
 
     logging.debug('Created json object: %s', d)
     # We re-use the Tweet parser because it sets all the default fields correctly.
-    return tweets.Tweet.fromJson(d)
+    return tweets.Tweet.fromJson(d, from_list=list_id)
 
   @classmethod
   def CreateUser(cls, id, screen_name, created_at=None):
@@ -152,6 +153,7 @@ class WebTestBase(unittest.TestCase):
   def assertGameDbSize(self, expected_size):
     query = game_model.Game.query()
     game_db = query.fetch(1000)
+    logging.info('Found games: %s', game_db)
     self.assertEquals(expected_size, len(game_db))
 
   def assertUserDbContents(self, user_ids):

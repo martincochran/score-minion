@@ -103,6 +103,8 @@ class ScoresApiTest(web_test_base.WebTestBase):
     self.assertEquals(2, len(response.games[0].teams))
     self.assertEquals('bob',
         response.games[0].teams[0].twitter_account.screen_name)
+    self.assertEquals('bob',
+        response.games[0].last_update_source.twitter_account.screen_name)
 
     # Request with no operators
     request = scores_messages.GamesRequest()

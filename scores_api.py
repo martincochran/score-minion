@@ -58,87 +58,6 @@ WEB_CLIENT_ID = '245407672402-oisb05fsubs9l96jfdfhn4tnmju4efqe.apps.googleuserco
 class ScoresApi(remote.Service):
   """Class which defines Score Minion API v1."""
 
-  @staticmethod
-  def _LookupMatchingGames(request, num=10):
-    """Returns a set of games from the DB matching the request criteria.
-
-    Args:
-      request: GamesRequest object specifying what games to look up
-      num: Number of games to retrieve from the DB
-
-    Returns:
-      The list of game_model.Game objects that match the criteria.
-    """
-    # Currently the only request filter is by division.
-    # TODO: support other filters (by tournament, eg)
-    games_query = game_model.Game.query()
-    if request.division:
-      games_query = games_query.filter(game_model.Game.division == request.division)
-    if request.age_bracket:
-      games_query = games_query.filter(game_model.Game.age_bracket == request.age_bracket)
-    if request.league:
-      games_query = games_query.filter(game_model.Game.league == request.league)
-    games_query = games_query.order(-game_model.Game.last_modified_at)
-
-    count = request.count
-    if not count:
-      count = num
-    return games_query.fetch(count)
-
-  @staticmethod
-  def _FindScoreIndicies(integer_entities, tweet_text):
-    """Return the two integer entities referring to the score.
-
-    Args:
-      integer_entities: a list of tweets.IntegerEntity objects.
-      tweet_text: Tweet text for logging purposes.
-
-    Returns:
-      The indicies of the objects referring to the scores, or an empty list if
-      there are no suitable indicies.
-    """
-    for i in range(len(integer_entities) - 1):
-      entA = integer_entities[i]
-      entB = integer_entities[i+1]
-      # For now, be very restrictive: only two integers who are close to one
-      # another.
-      if math.fabs(entA.end_idx - entB.start_idx) > 4.0:
-        logging.info('Integers too far apart: %s', tweet_text)
-        continue
-      # The score can't be too high. Some AUDL / MLU games might go to 
-      # high scores if there are multiple overtimes.
-      if entA.num + entB.num > 100:
-        logging.info('Numbers sum to too high of a number: %s', tweet_text)
-        continue
-      if tweet_text[entA.end_idx:entB.start_idx].find('-') != -1:
-        return [i, i+1]
-      logging.info('Could not find "-" in tweet text: %s', tweet_text)
-    # TODO: need to do something more sophisticated for this days with multiple
-    # games.
-    return []
-
-  @staticmethod
-  def _PossiblyEnqueueCrawling():
-    """Trigger a crawl if that hasn't been done in a while."""
-    host = app_identity.app_identity.get_default_version_hostname()
-    if not host or host.find('localhost') != -1:
-      logging.info('Local dev/test environment detected - Not enqueuing crawl')
-      return
-    
-    # Get the most recent tweet and compare it to UTC now
-    now = datetime.utcnow()
-    twts = tweets.Tweet.query().order(-tweets.Tweet.created_at).fetch(1)
-
-    if len(twts) and now - twts[0].created_at < timedelta(
-        hours=MAX_HOURS_CRAWL_LATENCY):
-      logging.debug('Not triggering crawl: time of last crawled tweet %s',
-          twts[0].created_at)
-      return
-
-    logging.info('Database stale - triggering crawl')
-    taskqueue.add(url='/tasks/crawl_all_lists', method='GET',
-        queue_name='list-statuses')
-
   @endpoints.method(GamesRequest, GamesResponse,
                     path='all_games', http_method='GET')
   def GetGames(self, request):
@@ -165,18 +84,12 @@ class ScoresApi(remote.Service):
       for team in proto_game.teams:
         if not team.twitter_account:
           continue
+        self._AddTwitterAccountInfo(team.twitter_account)
 
-        # TODO: save all users in memcache
-        user_id = team.twitter_account.id_str
-        account_query = tweets.User.query().order(tweets.User.screen_name)
-        account_query = account_query.filter(tweets.User.id_str == user_id)
-        user = account_query.fetch(1)
-        if not user:
-          continue
-        account = team.twitter_account
-        account.screen_name = user[0].screen_name
-        account.user_defined_name = user[0].name
-        account.profile_image_url_https = user[0].profile_image_url_https
+      source = proto_game.last_update_source
+      if source and source.twitter_account:
+        self._AddTwitterAccountInfo(
+            proto_game.last_update_source.twitter_account)
 
     return response
 
@@ -223,5 +136,73 @@ class ScoresApi(remote.Service):
         break
 
     return response
+
+  @staticmethod
+  def _LookupMatchingGames(request, num=10):
+    """Returns a set of games from the DB matching the request criteria.
+
+    Args:
+      request: GamesRequest object specifying what games to look up
+      num: Number of games to retrieve from the DB
+
+    Returns:
+      The list of game_model.Game objects that match the criteria.
+    """
+    # Currently the only request filter is by division.
+    # TODO: support other filters (by tournament, eg)
+    games_query = game_model.Game.query()
+    if request.division:
+      games_query = games_query.filter(game_model.Game.division == request.division)
+    if request.age_bracket:
+      games_query = games_query.filter(game_model.Game.age_bracket == request.age_bracket)
+    if request.league:
+      games_query = games_query.filter(game_model.Game.league == request.league)
+    games_query = games_query.order(-game_model.Game.last_modified_at)
+
+    count = request.count
+    if not count:
+      count = num
+    return games_query.fetch(count)
+
+  @staticmethod
+  def _PossiblyEnqueueCrawling():
+    """Trigger a crawl if that hasn't been done in a while."""
+    host = app_identity.app_identity.get_default_version_hostname()
+    if not host or host.find('localhost') != -1:
+      logging.info('Local dev/test environment detected - Not enqueuing crawl')
+      return
+    
+    # Get the most recent tweet and compare it to UTC now
+    now = datetime.utcnow()
+    twts = tweets.Tweet.query().order(-tweets.Tweet.created_at).fetch(1)
+
+    if len(twts) and now - twts[0].created_at < timedelta(
+        hours=MAX_HOURS_CRAWL_LATENCY):
+      logging.debug('Not triggering crawl: time of last crawled tweet %s',
+          twts[0].created_at)
+      return
+
+    logging.info('Database stale - triggering crawl')
+    taskqueue.add(url='/tasks/crawl_all_lists', method='GET',
+        queue_name='list-statuses')
+
+  @staticmethod
+  def _AddTwitterAccountInfo(twitter_account):
+    """Populate TwitterAccount with additional data from the datastore.
+
+    Args:
+      twitter_account: scores_messages.TwitterAccount object
+    """
+    # TODO: save all users in memcache
+    user_id = twitter_account.id_str
+    account_query = tweets.User.query().order(tweets.User.screen_name)
+    account_query = account_query.filter(tweets.User.id_str == user_id)
+    user = account_query.fetch(1)
+    if not user:
+      return
+    twitter_account.screen_name = user[0].screen_name
+    twitter_account.user_defined_name = user[0].name
+    twitter_account.profile_image_url_https = user[0].profile_image_url_https
+
 
 app = endpoints.api_server([ScoresApi], restricted=False)

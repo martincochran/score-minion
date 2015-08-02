@@ -343,7 +343,7 @@ def ParseDate(date_param):
   try:
     return datetime.strptime(date_param, DATE_PARSE_STRF)
   except ValueError as e:
-    logging.warning('Failed to parse date from param')
+    logging.debug('Failed to parse date from param')
     return None
 
 
@@ -449,6 +449,11 @@ class CrawlListHandler(webapp2.RequestHandler):
         continue
 
       model_user = tweets.User.getOrInsertFromJson(json_twt.get('user', {}))
+      json_user_url = json_twt.get('user', {}).get('profile_image_url_https')
+      # Update the user profile URL if it has changed.
+      if model_user and model_user.profile_image_url_https != json_user_url:
+        model_user.profile_image_url_https = json_user_url
+        model_user.put()
       if model_user and not users.get(model_user.id_str, None):
         users[model_user.id_str] = model_user
 

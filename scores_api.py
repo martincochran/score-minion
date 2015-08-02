@@ -121,6 +121,12 @@ class ScoresApi(remote.Service):
     logging.info('game returned: %s', games[0])
     response.game = games[0].ToProto()
 
+    # Add team info to response
+    for team in response.game.teams:
+      if not team.twitter_account:
+        continue
+      self._AddTwitterAccountInfo(team.twitter_account)
+
     num_sources = request.max_num_sources
     if not num_sources:
       num_sources = 50
@@ -129,6 +135,8 @@ class ScoresApi(remote.Service):
     for source in games[0].sources:
       if source.type == GameSourceType.TWITTER:
         response.twitter_sources.append(source.ToProto())
+        self._AddTwitterAccountInfo(
+            response.twitter_sources[-1].twitter_account)
       else:
         response.score_reporter_source = source.ToProto()
       num_added_sources += 1

@@ -16,6 +16,7 @@
 #
 
 from datetime import date, datetime, timedelta
+import json
 import mock
 import unittest
 import webtest
@@ -155,6 +156,51 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertTweetDbContents(['1', '4'], '123')
     self.assertUserDbContents(['2', '3'])
     self.assertGameDbSize(0)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlList_updateUserUrl(self, mock_add_queue):
+    now = datetime.utcnow()
+    fake_tweets = [
+        self.CreateTweet(4, ('alice', 3), created_at=now + timedelta(1, 0, 0)),
+    ]
+    self.SetTimelineResponse(list(fake_tweets))
+
+    # Modify the profile URL
+    json_obj = json.loads(self.return_content[0])
+    json_obj[0].get('user', {})['profile_image_url_https'] = 'a'
+    self.return_content = [json.dumps(json_obj)]
+
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+
+    self.assertTweetDbContents(['4'], '123')
+    self.assertUserDbContents(['3'])
+    user_query = tweets.User.query().filter(tweets.User.id_64 == 3)
+    users = user_query.fetch(1)
+    self.assertEquals(1, len(users))
+    self.assertEquals('a', users[0].profile_image_url_https)
+
+    # Now update it again - should be a new tweet and the user profile
+    # URL should be updated.
+    fake_tweets = [
+        self.CreateTweet(7, ('alice', 3), created_at=now + timedelta(2, 0, 0)),
+    ]
+    self.SetTimelineResponse(list(fake_tweets))
+    json_obj = json.loads(self.return_content[0])
+    json_obj[0].get('user', {})['profile_image_url_https'] = 'b'
+    self.return_content = [json.dumps(json_obj)]
+
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+
+    self.assertTweetDbContents(['4', '7'], '123')
+    user_query = tweets.User.query().filter(tweets.User.id_64 == 3)
+    users = user_query.fetch(1)
+    self.assertEquals(1, len(users))
+    self.assertEquals('b', users[0].profile_image_url_https)
 
     calls = mock_add_queue.mock_calls
     self.assertEquals(0, len(calls))

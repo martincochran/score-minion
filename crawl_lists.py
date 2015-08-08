@@ -449,7 +449,8 @@ class CrawlListHandler(webapp2.RequestHandler):
         continue
 
       model_user = tweets.User.getOrInsertFromJson(json_twt.get('user', {}))
-      json_user_url = json_twt.get('user', {}).get('profile_image_url_https')
+      json_user_url = json_twt.get('user', {}).get(
+          'profile_image_url_https', '')
       # Update the user profile URL if it has changed.
       if model_user and model_user.profile_image_url_https != json_user_url:
         model_user.profile_image_url_https = json_user_url
@@ -459,7 +460,6 @@ class CrawlListHandler(webapp2.RequestHandler):
 
       oldest_incoming_tweet = twt
       twts.append(twt)
-      tweets.User.getOrInsertFromJson(json_twt.get('user', {}))
 
     num_crawled = len(json_obj)
     self._PossiblyEnqueueMoreCrawling(crawl_state.list_id,

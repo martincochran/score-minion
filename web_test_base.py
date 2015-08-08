@@ -95,13 +95,14 @@ class WebTestBase(unittest.TestCase):
     return tweets.Tweet.fromJson(d, from_list=list_id)
 
   @classmethod
-  def CreateUser(cls, id, screen_name, created_at=None):
+  def CreateUser(cls, id, screen_name, created_at=None, profile_url_https=''):
     """Convience method to create a User object with minimal required fields.
     
     Args:
       id: (integer) id of user
       screen_name: screen_name of user
       created_at: datetime of when User was created.
+      profile_url_https: https URL of profile image
     Returns:
       A User object with these required fields.
     """
@@ -111,6 +112,8 @@ class WebTestBase(unittest.TestCase):
     d['screen_name'] = screen_name
     if created_at:
       d['created_at'] = tweets.WriteTweetDateString(created_at)
+    if profile_url_https:
+      d['profile_image_url_https'] = profile_url_https
 
     return tweets.User.fromJson(d)
 

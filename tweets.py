@@ -630,6 +630,24 @@ class User(ndb.Model):
     """Builds a User object from a json object."""
     return User.__BuildConstructorArgs(json_obj, False)
 
+  # TODO: Don't use java camel-casing.
+  def toJsonString(self):
+    """Write this object to json string.
+    
+    Only suitable for testing at the moment.  Not idempotent when composed with
+    calls to fromJson.
+    """
+    d = {
+      'id_str': self.id_str,
+      'id': self.id_64,
+      'screen_name': self.screen_name,
+      'profile_image_url_https': self.profile_image_url_https,
+    }
+    
+    if self.created_at:
+      d['created_at'] = WriteTweetDateString(self.created_at)
+    return json.dumps(d)
+
   @classmethod
   def __BuildConstructorArgs(cls, json_obj, insert):
     id_str = json_obj.get('id_str', '')

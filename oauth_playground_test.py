@@ -51,14 +51,16 @@ class OauthPlaygroundTest(web_test_base.WebTestBase):
     twt = self.CreateTweet('5', ('bob', '132'))
     lookup_lists_response = '{"lists": [{"id_str": "1234"}]}'
     list_twt = self.CreateTweet('8', ('chuck', '12'))
+    lookup_user_response = '[{"id_str": "789", "screen_name": "alice"}]'
 
-    self.return_statuscode = [200, 200, 200]
+    self.return_statuscode = [200, 200, 200, 200]
     self.return_content = [twt.toJsonString(), lookup_lists_response,
-                           list_twt.toJsonString()]
+                           list_twt.toJsonString(), lookup_user_response]
 
     params = {
       'account': 'test_account',
       'num': 2,
+      'user_id': '6',
     }
     response = self.testapp.post(oauth_playground.URL_BASE, params)
     self.assertEqual(200, response.status_int)
@@ -68,6 +70,7 @@ class OauthPlaygroundTest(web_test_base.WebTestBase):
     self.assertTrue(response.body.find(u'bob') != -1)
     self.assertTrue(response.body.find(u'1234') != -1)
     self.assertTrue(response.body.find(u'chuck') != -1)
+    self.assertTrue(response.body.find(u'alice') != -1)
 
   @mock.patch.object(users, 'get_current_user')
   def testPost_emptyResponses(self, mock_get_current_user):
@@ -75,12 +78,13 @@ class OauthPlaygroundTest(web_test_base.WebTestBase):
     mock_get_current_user.return_value = users.User(
         email='bob@test.com', _auth_domain='gmail.com')
 
-    self.return_statuscode = [200, 200, 200]
-    self.return_content = ['{}', '{}', '{}']
+    self.return_statuscode = [200, 200, 200, 200]
+    self.return_content = ['{}', '{}', '{}', '{}']
 
     params = {
       'account': 'test_account',
       'num': 2,
+      'user_id': '6',
     }
     response = self.testapp.post(oauth_playground.URL_BASE, params)
     logging.info(response.body)

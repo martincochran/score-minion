@@ -111,13 +111,21 @@ class TwitterFetcher:
     """
     pass
 
-  def LookupUsers(self):
+  def LookupUsers(self, user_id):
     """Lookup the info for a set of users.
 
     Rate limit: 60 / 15 minute window.
     More info: https://dev.twitter.com/rest/reference/get/users/lookup
+
+    Args:
+      user_id: comma-separated list of user ids - at most 100
     """
-    pass
+    url = '%s%s' % (self.API_BASE_URL, self.LOOKUP_USERS_URL)
+    params = {
+      'user_id': user_id,
+    }
+    response = self._FetchResults(url, params=params)
+    return response
 
   def LookupLists(self, screen_name, count=50, fake_data=False):
     """List the lists owned by a given user.

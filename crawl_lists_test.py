@@ -17,6 +17,7 @@
 
 from datetime import date, datetime, timedelta
 import json
+import logging
 import mock
 import unittest
 import webtest
@@ -500,6 +501,81 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertEquals(calls[1], mock.call(
         url='/tasks/crawl_list', method='GET',
         params={'list_id': '87', 'fake_data': ''}, queue_name='list-statuses'))
+
+  def testCrawlAllUsers_noUsers(self):
+    """Ensure crawl_all_users handles case when there are no users."""
+    response = self.testapp.get('/tasks/crawl_all_lists')
+    self.assertEqual(200, response.status_int)
+    self.assertEqual('No lists to crawl', response.body)
+
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlAllUsers_someUsers(self, mock_add_queue):
+    """Ensure crawl_all_users handles case when there is one user."""
+    self.CreateUser(2, 'bob').put()
+    response = self.testapp.get('/tasks/crawl_all_users')
+    self.assertEqual(200, response.status_int)
+    self.assertTrue(response.body.find('2') != -1)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(1, len(calls))
+    self.assertEquals(calls[0], mock.call(
+        url='/tasks/crawl_users', method='POST',
+        params={'user_id': '2'},
+        queue_name='lookup-users'))
+
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlAllUsers_manyUsers(self, mock_add_queue):
+    """Ensure crawl_all_users handles case when there many users."""
+    offset = 1000
+    num_users = crawl_lists.MAX_USERS_PER_CRAWL_REQUEST + 1
+    for i in range(crawl_lists.MAX_USERS_PER_CRAWL_REQUEST + 1):
+      self.CreateUser(i + offset, 'bob_%s' % i).put()
+    response = self.testapp.get('/tasks/crawl_all_users')
+    self.assertEqual(200, response.status_int)
+
+    # Ensure it enqueued requests for all of them.
+    logging.info('crawl_users response: %s', response.body)
+    self.assertTrue(response.body.find('%s' % num_users) != -1)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(2, len(calls))
+    self.assertEquals(calls[0], mock.call(
+        url='/tasks/crawl_users', method='POST',
+        params={'user_id': ','.join(
+          [str(i + offset) for i in range(num_users - 1)])},
+        queue_name='lookup-users'))
+    self.assertEquals(calls[1], mock.call(
+        url='/tasks/crawl_users', method='POST',
+        params={'user_id': '%s' % (num_users + offset - 1)},
+        queue_name='lookup-users'))
+    
+  @mock.patch.object(taskqueue, 'add')
+  def testCrawlUsers_multipleUsers(self, mock_add_queue):
+    """Ensure crawl_users handles case when there many users."""
+    # Create the canonical user.
+    bob = self.CreateUser(2, 'bob')
+    key = bob.key
+    tweets.User.getOrInsertFromJson(json.loads(bob.toJsonString()))
+
+    # Now create a duplicate as if there was a data cleanup error.
+    bob = self.CreateUser(2, 'bob')
+    bob.put()
+
+    self.assertUserDbContents(['2', '2'])
+
+    # Update the profile URL
+    bob.profile_image_url_https = 'u'
+
+    self.SetJsonResponse('[%s]' % bob.toJsonString())
+    response = self.testapp.post('/tasks/crawl_users', params={
+      'user_id': '2'})
+    self.assertEqual(200, response.status_int)
+
+    self.assertUserDbContents(['2'])
+
+    # Assert that the profile URL was updated in the db.
+    users = tweets.User.query().fetch()
+    self.assertEquals('u', users[0].profile_image_url_https)
 
   @mock.patch.object(taskqueue, 'add')
   def testUpdateLists_cronEntryPoint(self, mock_add_queue):

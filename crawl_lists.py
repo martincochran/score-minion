@@ -66,6 +66,9 @@ FIRST_TWEET_IN_STREAM_ID = 2L
 # creating a new one.
 GAME_CONSISTENCY_THRESHOLD = 1.0
 
+# Maximum users per user crawl request.
+MAX_USERS_PER_CRAWL_REQUEST = 100
+
 UNKNOWN_SR_ID = 'unknown_id'
 
 MAX_LENGTH_OF_GAME_IN_HOURS = 5
@@ -347,6 +350,90 @@ def ParseDate(date_param):
     return None
 
 
+class CrawlAllUsersHandler(webapp2.RequestHandler):
+  """Handler to rate-list enqueue crawling for all known users."""
+  def get(self):
+    users_list_result = tweets.User.query().fetch()
+    if not users_list_result:
+      msg = 'No users to crawl'
+      logging.warning(msg)
+      self.response.write(msg)
+      return
+
+    user_ids = set()
+
+    # For every user, put the id_str into a set. This will ensure only one
+    # crawl request is made even if there are multiple user objects for a
+    # given ID str.
+    for user in users_list_result:
+      user_ids.add(user.id_str)
+
+    # This makes testing easier.
+    sorted_user_ids = sorted(user_ids)
+    crawl_user_set = []
+    for user_id in sorted_user_ids:
+      crawl_user_set.append(user_id)
+      if len(crawl_user_set) >= MAX_USERS_PER_CRAWL_REQUEST:
+        taskqueue.add(url='/tasks/crawl_users', method='POST',
+            params={'user_id': ','.join(crawl_user_set)},
+            queue_name='lookup-users')
+        crawl_user_set = []
+
+    # Request all the remaining ids.
+    if crawl_user_set:
+      taskqueue.add(url='/tasks/crawl_users', method='POST',
+          params={'user_id': ','.join(crawl_user_set)},
+          queue_name='lookup-users')
+
+    msg = 'Enqueued crawl requests for users %s' % ', '.join(sorted(user_ids))
+    logging.debug(msg)
+    self.response.write(msg)
+
+
+class CrawlUserHandler(webapp2.RequestHandler):
+  """Handler to update twitter user information for multiple users."""
+  def post(self):
+    user_id_param = self.request.get('user_id')
+    if not user_id_param:
+      msg = 'No user id specified'
+      logging.warning(msg)
+      self.response.write(msg)
+      return
+
+    # Assumption is user_id_param is a comma-separated list of
+    # user ids as specified at
+    # https://dev.twitter.com/rest/reference/get/users/lookup
+    token_manager = oauth_token_manager.OauthTokenManager()
+    fetcher = twitter_fetcher.TwitterFetcher(token_manager)
+
+    try:
+      json_obj = fetcher.LookupUsers(user_id_param)
+    except twitter_fetcher.FetchError as e:
+      msg = 'Could not lookup users %s' % user_id_param
+      logging.warning('%s: %s', msg, e)
+      self.response.write(msg)
+
+    for json_user in json_obj:
+      # TODO: refactor into separate method
+      model_user = tweets.User.getOrInsertFromJson(json_user)
+      json_user_url = json_user.get('profile_image_url_https', '')
+      # Update the user profile URL if it has changed.
+      if model_user and model_user.profile_image_url_https != json_user_url:
+        model_user.profile_image_url_https = json_user_url
+        model_user.put()
+
+      # Clean-up: only need to do once on production data.
+      # TODO: delete after the one-time clean-up
+      # Lookup all users with that ID.
+      user_query = tweets.User.query(
+          tweets.User.id_str == json_user.get('id_str', ''))
+      all_users = user_query.fetch()
+      for user in all_users:
+        if user.key != model_user.key:
+          logging.info('Deleting extra user: %s', user.screen_name)
+          user.key.delete()
+ 
+
 class CrawlListHandler(webapp2.RequestHandler):
   """Crawls the new statuses from a pre-defined list."""
   def get(self):
@@ -356,7 +443,6 @@ class CrawlListHandler(webapp2.RequestHandler):
       logging.warning(msg)
       self.response.write(msg)
       return
-
 
     last_tweet_id = self._LookupLatestTweet(list_id)
     crawl_state = CrawlState.FromRequest(self.request, last_tweet_id)
@@ -849,4 +935,6 @@ app = webapp2.WSGIApplication([
   ('/tasks/backfill_games', BackfillGamesHandler),
   ('/tasks/crawl_list', CrawlListHandler),
   ('/tasks/crawl_all_lists', CrawlAllListsHandler),
+  ('/tasks/crawl_users', CrawlUserHandler),
+  ('/tasks/crawl_all_users', CrawlAllUsersHandler),
 ], debug=True)

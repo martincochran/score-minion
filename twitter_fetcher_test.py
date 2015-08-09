@@ -252,6 +252,20 @@ class TwitterFetcherTest(unittest.TestCase):
     json_obj = self.fetcher.ListStatuses('186815046')
     self.assertEquals(type(json_obj), list)
 
+  def testLookupUsers(self):
+    """Test basic LookupUsers functionality."""
+    self.return_statuscode = [200]
+
+    # Some common fields in the response content
+    content_items = [
+        '"id_str":"186815046"',
+        '"screen_name":"bob"',
+    ]
+    self.return_content = ['[{%s}]' % ','.join(content_items)]
+
+    json_obj = self.fetcher.LookupUsers('186815046')
+    self.assertEquals(type(json_obj), list)
+
 
 if __name__ == '__main__':
   unittest.main()

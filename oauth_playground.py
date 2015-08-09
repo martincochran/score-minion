@@ -37,6 +37,9 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 # The default account from which data will be queried.
 SCREEN_NAME_DEFAULT = 'martin_cochran'
 
+
+USER_ID_DEFAULT = '568757027'
+
 # The default number of results from each fetch type. For simplicity, this
 # value will passed as the 'count' param for every function in
 # twitter_fetcher.TwitterFetcher which has 'count' as a keyword argument.
@@ -72,6 +75,11 @@ class OauthPlaygroundHandler(webapp2.RequestHandler):
           template_values['account'], count=template_values['num'])
     except twitter_fetcher.FetchError as e:
       template_values['lookup_lists_response'] = e
+    try:
+      template_values['lookup_user_response'] = fetcher.LookupUsers(
+          template_values['user_id'])
+    except twitter_fetcher.FetchError as e:
+      template_values['lookup_user_response'] = e
 
     # Find the first list and fetch tweets from it
     list_id = self._GetFirstListId(template_values['lookup_lists_response'])
@@ -97,11 +105,15 @@ class OauthPlaygroundHandler(webapp2.RequestHandler):
     account = self.request.get('screen_name',
         default_value=SCREEN_NAME_DEFAULT)
     num = int(self.request.get('num', default_value=NUM_DEFAULT))
+    user_id = self.request.get('user_id',
+        default_value=USER_ID_DEFAULT)
     template_values = {
       'account': account,
       'num': num,
+      'user_id': user_id,
       'user_timeline_response': '',
       'lookup_lists_response': '',
+      'lookup_user_response': '',
       'list_statuses_response': '',
     }
     return template_values

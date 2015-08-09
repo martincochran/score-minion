@@ -15,3 +15,7 @@ queue:
 # Backfill / processing queues
 - name: game-backfill
   rate: 1/s
+
+# /users/lookup.json
+- name: lookup-users
+  rate: 4/m

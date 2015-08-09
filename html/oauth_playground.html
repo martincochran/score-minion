@@ -9,6 +9,7 @@
       Fetch params
       <div><input type=text name="num" value={{num}}></textarea></div>
       <div><input type=text name="screen_name" value={{account}}></textarea></div>
+      <div><input type=text name="user_id" value={{user_id}}></textarea></div>
       <div><input type="submit" value="Get oauth responses"></div>
     </form>
 
@@ -16,6 +17,11 @@
     <div>
     <b>LoadTimeline response:</b>
     <br>{{ user_timeline_response }}
+    </div>
+
+    <div>
+    <b>LookupUser response:</b>
+    <br>{{ lookup_user_response }}
     </div>
 
     <div>

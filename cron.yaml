@@ -9,3 +9,7 @@ cron:
 - description: Crawl all admin-defined lists
   url: /tasks/crawl_all_lists
   schedule: every 48 hours
+
+- description: Update all users
+  url: /tasks/crawl_all_users
+  schedule: every friday 09:00

@@ -26,8 +26,34 @@ indexes:
 
 - kind: Game
   properties:
+  - name: a
+  - name: d
+  - name: lm
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: a
+  - name: l
+  - name: lm
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: a
+  - name: lm
+    direction: desc
+
+- kind: Game
+  properties:
   - name: d
   - name: l
+  - name: lm
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: d
   - name: lm
     direction: desc
 

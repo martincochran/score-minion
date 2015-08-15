@@ -29,6 +29,7 @@ from game_model import GameSource
 from game_model import Team
 from scores_messages import AgeBracket
 from scores_messages import Division
+from scores_messages import GameSourceType
 from scores_messages import League
 
 import webapp2
@@ -270,7 +271,8 @@ class BackfillGamesHandler(webapp2.RequestHandler):
         taskqueue.add(url='/tasks/crawl_list', method='GET',
             params={
                 'list_id': l,
-                'backfill_date': backfill_date.strftime(DATE_PARSE_STRF)
+                'backfill_date': backfill_date.strftime(DATE_PARSE_STRF),
+                'update_games_only': self.request.get('update_games_only')
             },
             queue_name='game-backfill')
 
@@ -453,16 +455,18 @@ class CrawlListHandler(webapp2.RequestHandler):
         crawl_state.list_id)
 
     backfill_date = ParseDate(self.request.get('backfill_date'))
+    update_games_only = self.request.get('update_games_only')
     games_start = datetime.utcnow()
     if backfill_date:
       games_start = backfill_date + timedelta(weeks=1)
       # Query tweets for that week for this list
-      tweet_query = tweets.Tweet.query(
-          tweets.Tweet.from_list == list_id,
-          tweets.Tweet.created_at > games_start - timedelta(weeks=1),
-          tweets.Tweet.created_at < games_start).order(
-          ).order(-tweets.Tweet.created_at)
-      twts_future = tweet_query.fetch_async()
+      if not update_games_only:
+        tweet_query = tweets.Tweet.query(
+            tweets.Tweet.from_list == list_id,
+            tweets.Tweet.created_at > games_start - timedelta(weeks=1),
+            tweets.Tweet.created_at < games_start).order(
+            ).order(-tweets.Tweet.created_at)
+        twts_future = tweet_query.fetch_async()
 
     # Only pull up games for the last two weeks.
     # TODO: run a separate query for games populated from score reporter, which
@@ -494,7 +498,10 @@ class CrawlListHandler(webapp2.RequestHandler):
       twts, users = self.UpdateTweetDbWithNewTweets(json_obj, crawl_state)
 
     if backfill_date:
-      twts = twts_future.get_result()
+      if update_games_only:
+        twts = []
+      else:
+        twts = twts_future.get_result()
       users = {}
 
     existing_games = games_future.get_result()
@@ -588,6 +595,7 @@ class CrawlListHandler(webapp2.RequestHandler):
     # Update the games
     # TOOD: consider doing this in one transaction to save time
     for game in existing_games + added_games:
+      self._UpdateGameConsistency(game, users)
       game.put()
 
   def _PossiblyEnqueueMoreCrawling(self, list_id, tweet_in_db_id,
@@ -661,6 +669,66 @@ class CrawlListHandler(webapp2.RequestHandler):
         total_crawled, num_tweets_crawled)
     return taskqueue.add(url='/tasks/crawl_list', method='GET',
         params=params, queue_name='list-statuses')
+
+  def _UpdateGameConsistency(self, game, user_map):
+    """Update the game consistency.
+
+    This function will do data clean-up to ensure there are two teams
+    per game, that the score reflects the right teams, etc.
+
+    Args:
+      game: the game_model.Game object to update.
+    """
+    # Figure out the right teams. Count the number of tweets by each author
+    # and the number of mentions of any account.
+    # TODO(ultiworld): this will have to be reconsidered when tweets by 
+    # ultiworld are considered.
+    teams = {}
+    for source in game.sources:
+      if source.type != GameSourceType.TWITTER:
+        continue
+      account = source.account_id
+      teams[account] = teams.get(account, 0) + 1
+      # TODO: keep track of mentions and update those as well. It's possible,
+      # eg, that a user was added to the db after the game was originally
+      # crawled.
+
+    sorted_teams = sorted([(v, k) for (k, v) in teams.items()], reverse=True)
+
+    # Take the top 2
+    if not sorted_teams:
+      logging.error('Didn\'t find any teams: %s', game)
+      return
+
+    teams_in_game = set()
+    for team in game.teams:
+      if not team.twitter_id:
+        continue
+      teams_in_game.add(team.twitter_id)
+    
+    logging.debug('sorted teams: %s', sorted_teams)
+    if len(teams_in_game) >= 2:
+      if sorted_teams[0][1] in teams_in_game:
+        if len(sorted_teams) == 1:
+          logging.debug('Game teams already in a good state.')
+          return
+        if sorted_teams[1][1] in teams_in_game:
+          logging.debug('Game teams already in a good state.')
+          return
+
+    if len(teams_in_game) == len(sorted_teams):
+      if sorted_teams[0][1] in teams_in_game:
+        return
+
+    # Teams are inconsistent in the game - update them.
+    logging.info('Updating inconsistent game: %s', game.id_str)
+    team_a = self._TeamFromAuthorId(str(sorted_teams[0][1]), user_map)
+    if len(sorted_teams) > 1:
+      team_b = self._TeamFromAuthorId(str(sorted_teams[1][1]), user_map)
+    else:
+      team_b = Team(score_reporter_id=UNKNOWN_SR_ID)
+
+    game.teams = [team_a, team_b]
 
   def _PossiblyAddTweetToGame(self, twt, existing_games, added_games, user_map,
       division, age_bracket, league):

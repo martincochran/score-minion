@@ -26,7 +26,7 @@ import test_env_setup
 from google.appengine.api import taskqueue
 
 import crawl_lists
-from game_model import Game
+from game_model import Game, GameSource, Team
 import list_id_bimap
 from scores_messages import AgeBracket
 from scores_messages import Division
@@ -1101,6 +1101,25 @@ class CrawlListsTest(web_test_base.WebTestBase):
         '/tasks/crawl_list?list_id=123&backfill_date=%s' % creation_date_str)
     self.assertEqual(200, response.status_int)
     self.assertGameDbSize(1)
+
+  def testUpdateGameConsistency(self):
+    """Test updating games with only one tweet."""
+    # Create game with only one team and one game source.
+    game = Game()
+    self.CreateUser(2, 'bob').put()
+    twt = self.CreateTweet(5, ('bob', 2), 'up 5-7')
+    game.sources = [GameSource.FromTweet(twt)]
+
+    game.teams = [Team(score_reporter_id=crawl_lists.UNKNOWN_SR_ID)]
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    crawl_lists_handler._UpdateGameConsistency(game, {})
+    self.assertEqual(2, len(game.teams))
+    self.assertEqual(2, game.teams[0].twitter_id)
+
+    # Update it again - no changes should have been made.
+    crawl_lists_handler._UpdateGameConsistency(game, {})
+    self.assertEqual(2, len(game.teams))
+    self.assertEqual(2, game.teams[0].twitter_id)
 
 
 if __name__ == '__main__':

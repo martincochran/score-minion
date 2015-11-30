@@ -19,3 +19,8 @@ queue:
 # /users/lookup.json
 - name: lookup-users
   rate: 4/m
+
+# All score-reporter related crawling to make sure we don't DDOS them.
+# /tasks/sr/*
+- name: score-reporter
+  rate: 10/m

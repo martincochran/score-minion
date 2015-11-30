@@ -122,6 +122,11 @@ class WebTestBase(unittest.TestCase):
     self.return_statuscode = [status_code]
     self.return_content = [json_str]
 
+  def SetHtmlResponse(self, html_str, status_code=200):
+    """Sets the HTML response content for the URL fetch library."""
+    # For now these can be the same function.
+    self.SetJsonResponse(html_str, status_code=status_code)
+
   def SetTimelineResponse(self, twts):
     """Set a timeline response from the given tweets.Tweet objects.
 

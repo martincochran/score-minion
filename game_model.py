@@ -47,6 +47,10 @@ def game_key_full(game_id, game_table_name=DEFAULT_GAME_DB_NAME):
 
 def game_key(proto_obj):
   """Build a key from a scores_messages.Game protobuf object."""
+  # TODO: this probably needs to be the score-reporter game ID of
+  # some sort (SR assigns unique game ids), otherwise there will be
+  # no consistent way for the crawler to determine if a game is
+  # already in the DB.
   return game_key_full(proto_obj.id_str)
 
 
@@ -58,6 +62,16 @@ def team_twitter_key(team_twitter_id, team_table_name=DEFAULT_TEAM_TABLE_NAME):
 
 def team_score_reporter_key(team_sr_id, team_table_name=SR_TEAM_TABLE_NAME):
   return ndb.Key('Team', '%s_%s' % (team_table_name, team_sr_id)) 
+
+
+class TeamIdLookup(ndb.Model):
+  """Model to store mapping from TeamIds to team tourney IDs."""
+
+  # ID of team on score reporter
+  score_reporter_id = ndb.StringProperty('id')
+
+  # Tournament-specific tournament ID associated with this team.
+  score_reporter_tourney_id = ndb.StringProperty('t_id', repeated=True)
 
 
 class Team(ndb.Model):
@@ -162,9 +176,35 @@ class GameSource(ndb.Model):
       source.score_reporter_url = self.score_reporter_url
     return source
 
-# TODO: add a tournament class that can be used to look up tournaments when
-# building the database from score reporter.
 
+class SubTournament(ndb.Model):
+  division = msgprop.EnumProperty(scores_messages.Division, 'd')
+
+  age_bracket = msgprop.EnumProperty(scores_messages.AgeBracket, 'a')
+
+
+class Tournament(ndb.Model):
+  """Information about the score reporter tournament."""
+  id_str = ndb.StringProperty('id', required=True)
+
+  # URL for landing page of tournament. The URLs for a given division and
+  # age bracket can be computed from this.
+  url = ndb.StringProperty('u', required=True)
+
+  name = ndb.StringProperty('n')
+
+  # The specific divisions and age brackets in the tournament.
+  sub_tournaments = ndb.StructuredProperty(SubTournament, 's', repeated=True)
+
+  # Day the tournament starts. This must be before any of the games are played.
+  start_date = ndb.DateTimeProperty('sd')
+
+  # First day after all games are done. This must be later than the ending
+  # of the last game.
+  end_date = ndb.DateTimeProperty('ed')
+
+  # Location of tournament
+  location = ndb.GeoPtProperty('l')
 
 class Game(ndb.Model):
   """Information about a single game including all sources."""
@@ -176,6 +216,8 @@ class Game(ndb.Model):
   name = ndb.StringProperty('n')
 
   tournament_id = ndb.StringProperty('tid')
+
+  # TODO: consider adding a separate ID for score reporter
 
   tournament_name = ndb.StringProperty('tn')
 
@@ -245,6 +287,36 @@ class Game(ndb.Model):
         last_modified_at=twt.created_at,
         sources=[GameSource.FromTweet(twt)],
         parent=game_key_full(game_id))
+
+  @classmethod
+  def FromGameInfo(cls, info):
+    """Builds Game from GameInfo object crawled from Score Reporter."""
+    # Build team objects
+    teams = []
+    # Parse scores
+    scores = []
+    name = info.bracket_title or info.pool_name
+    status = scores_messages.GameStatus.UNKNOWN
+    if info.status.lower() == 'final':
+      status = scores_messages.GameStatus.FINAL
+    return Game(id_str=info.id,
+        name=name,
+        teams=teams,
+        scores=scores,
+        # TODO: this means the tourney ID will be score-reporter
+        # generated. This may or may not be a good thing.
+        tournament_id=info.tourney_id,
+        tournament_name=info.tourney_name,
+        division=info.division,
+        age_bracket=info.age_bracket,
+        league=scores_messages.League.USAU,
+        created_at=info.created_at,
+        last_modified_at=datetime.datetime.utcnow(),
+        # TODO: create proper source
+        sources=[],
+        # TODO: need to use another ID in order for game lookups to be consistent
+        parent=game_key_full(info.id))
+
 
   def ToProto(self):
     """Builds a Game protobuf object from this instance."""

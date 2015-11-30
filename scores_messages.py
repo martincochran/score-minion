@@ -71,6 +71,9 @@ class Team(messages.Message):
   # URL of score reporter page for that team.
   score_reporter_id = messages.StringField(2)
 
+  # Tournament-specific tournament ID associated with this team.
+  score_reporter_tourney_id = messages.StringField(3, repeated=True)
+
 
 class GameSourceType(messages.Enum):
   SCORE_REPORTER = 1

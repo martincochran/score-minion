@@ -37,6 +37,16 @@ handlers:
   login: admin
 
 ## Crawling
+### Score reporter
+- url: /tasks/sr/crawl.*
+  script: score_reporter_handler.app
+  login: admin
+
+- url: /tasks/sr/list.*
+  script: score_reporter_handler.app
+  login: admin
+
+### Twitter
 - url: /tasks/crawl.*
   script: crawl_lists.app
   login: admin

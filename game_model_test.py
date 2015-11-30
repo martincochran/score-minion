@@ -22,6 +22,7 @@ import uuid
 import test_env_setup
 
 import game_model
+import score_reporter_crawler
 import scores_messages
 import tweets
 import web_test_base
@@ -80,6 +81,15 @@ class GameModelTest(unittest.TestCase):
     converted_game = game_model.Game.FromProto(game.ToProto())
     self.assertNotEquals(game, converted_game)
     self.assertEquals(1, len(converted_game.sources))
+
+  def testGameSerialization_fromGameInfo(self):
+    game_info = score_reporter_crawler.GameInfo('id', 'tourney_id',
+        scores_messages.Division.OPEN,
+        scores_messages.AgeBracket.NO_RESTRICTION)
+    converted_game = game_model.Game.FromGameInfo(game_info)
+
+    # TODO: create a proper game source and verify that here
+    self.assertEquals(0, len(converted_game.sources))
 
   def testTeamSerialization(self):
     """Verify serialization between Team protobuf and ndb classes."""

@@ -75,8 +75,13 @@ class ScoreReporterHandler(webapp2.RequestHandler):
     for tourney in tournaments:
       logging.info('tourney: %s', tourney)
       tourney_name = tourney[len(score_reporter_crawler.EVENT_PREFIX):]
+      # Strip off trailing '/'
+      if tourney_name[-1] == '/':
+        tourney_name = tourney_name[:-1]
       taskqueue.add(url=url, method='GET',
           params={'name': tourney_name}, queue_name='score-reporter')
+    msg = 'Scheduled crawling for the following URLs:\n%s' % '\n'.join(tournaments)
+    self.response.write(msg)
 
 
 class TournamentLandingPageHandler(webapp2.RequestHandler):
@@ -137,26 +142,21 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     response = FetchUsauPage('%s/%s' % (name, url))
 
     crawler = score_reporter_crawler.ScoreReporterCrawler()
-    # TODO: consider building the full URL to pass to
-    # ParseTournamentInfo. Same as below for the call to 
-    # ParseGameInfo.
     # TODO: look to see if tourney is already in DB. If not, then
     # parse the tourney info from the page (only want to do
     # rarely to avoid using Maps API). It's possible that the
     # tournament exists but the sub-division does not yet exist and
     # this needs to be handled gracefully (probably by just updating
     # the division in an atomic read/write transaction).
-
-    # TODO: probably want to pass the name to this, because the full
-    # URL cannot be determined just from the name passed here
-    tourney_info = crawler.ParseTournamentInfo(response.content, url,
+    full_url = '%s/%s' % (name, url)
+    tourney_info = crawler.ParseTournamentInfo(response.content, full_url,
         enum_division, enum_age_bracket)
 
     # TODO: Lookup games in this time frame or that were crawled from this
     # score reporter URL.
     existing_games = []
-    game_infos = crawler.ParseGameInfos(response.content, existing_games, url,
-        enum_division, enum_age_bracket)
+    game_infos = crawler.ParseGameInfos(response.content, existing_games,
+        full_url, name, enum_division, enum_age_bracket)
 
     team_tourney_ids = set()
     for game_info in game_infos:
@@ -191,6 +191,8 @@ class TournamentScoresHandler(webapp2.RequestHandler):
 class TeamHandler(webapp2.RequestHandler):
   def get(self):
     """Loads the team page and crawls it."""
+    # TODO: implement
+    return
     crawler = score_reporter_crawler.ScoreReporterCrawler()
     url = self.request.get('url', '')
 

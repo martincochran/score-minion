@@ -23,6 +23,7 @@ import test_env_setup
 from google.appengine.api import taskqueue
 
 import game_model
+import score_reporter_crawler
 import score_reporter_handler
 import score_reporter_testdata
 import scores_messages
@@ -33,7 +34,7 @@ import web_test_base
 FAKE_LANDING_PAGE = """
 <!doctype html> 
 <body>
-<a href="http://play.usaultimate.org/events/Womens-Sectionals-2015">
+<a href="http://play.usaultimate.org/events/Womens-Sectionals-2015/">
 women's sectionals
 </a>
 <a href="http://play.usaultimate.org/events/Mens-Sectionals-2015">
@@ -207,14 +208,16 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
           'age_bracket': 'COLLEGE'},
         queue_name='score-reporter'))
 
+    full_url = '%s%s' % (score_reporter_crawler.EVENT_PREFIX,
+        'my_tourney/schedule/Men/College-Men/')
     game_query = game_model.Game.query()
     games = game_query.fetch(1000)
     self.assertEqual(1, len(games))
     self.assertEqual(scores_messages.Division.OPEN, games[0].division)
     self.assertEqual(scores_messages.AgeBracket.COLLEGE, games[0].age_bracket)
     self.assertEqual('71984', games[0].id_str)
-    self.assertEqual('schedule/Men/College-Men/', games[0].tournament_id)
-    self.assertEqual('', games[0].tournament_name)
+    self.assertEqual(full_url, games[0].tournament_id)
+    self.assertEqual('my_tourney', games[0].tournament_name)
 
   @mock.patch.object(score_reporter_handler, 'FetchUsauPage')
   @mock.patch.object(taskqueue, 'add')

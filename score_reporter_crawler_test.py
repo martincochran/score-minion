@@ -105,16 +105,18 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
   def testParseGameInfos_singleDivision(self):
     content = self.testdata.GetLinkedScoresPage()
     existing_games = []
-    url = 'East-New-England-Mens-Sectionals-2015/schedule/Men/Club-Men/'
+    name = 'East-New-England-Mens-Sectionals-2015'
+    url = '%s/%s' % (name, '/schedule/Men/Club-Men/')
     actual_games =  self.crawler.ParseGameInfos(content, existing_games, url,
-        scores_messages.Division.OPEN,
+        name, scores_messages.Division.OPEN,
         scores_messages.AgeBracket.NO_RESTRICTION)
 
     # No placement brackets for this tournament.
     self.assertEqual(31, len(actual_games))
 
     # Verify full parsing of one pool play game.
-    game = score_reporter_crawler.GameInfo('83210', url,
+    full_url = '%s/%s' % (score_reporter_crawler.EVENT_PREFIX, url)
+    game = score_reporter_crawler.GameInfo('83210', full_url, name,
         scores_messages.Division.OPEN,
         scores_messages.AgeBracket.NO_RESTRICTION)
     game.date = 'Sat 8/29'
@@ -131,7 +133,7 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
     self.assertEqual(game, actual_games[0])
 
     # Verify full parsing of one bracket game.
-    game = score_reporter_crawler.GameInfo('83230', url,
+    game = score_reporter_crawler.GameInfo('83230', full_url, name,
         scores_messages.Division.OPEN,
         scores_messages.AgeBracket.NO_RESTRICTION)
     game.date = '8/30/2015 11:30 AM'
@@ -150,15 +152,18 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
   def testParseGameInfos_multipleDivisions(self):
     content = self.testdata.GetMultiDivisionTournamentScoresPage()
     existing_games = []
-    url = 'USA-Ultimate-D-I-College-Championships-2015/schedule/Men/College-Men/'
-    actual_games = self.crawler.ParseGameInfos(content, existing_games, url,
-        scores_messages.Division.OPEN, scores_messages.AgeBracket.COLLEGE)
+    name = 'USA-Ultimate-D-I-College-Championships-2015'
+    url = '%s/%s' % (name, 'schedule/Men/College-Men/')
+    full_url = '%s/%s' % (score_reporter_crawler.EVENT_PREFIX, url)
+    actual_games = self.crawler.ParseGameInfos(content, existing_games,
+        full_url, name, scores_messages.Division.OPEN,
+        scores_messages.AgeBracket.COLLEGE)
 
     self.assertEqual(55, len(actual_games))
     logging.info(actual_games)
 
     # Verify full parsing of one pool play game.
-    game = score_reporter_crawler.GameInfo('71984', url,
+    game = score_reporter_crawler.GameInfo('71984', full_url, name,
         scores_messages.Division.OPEN,
         scores_messages.AgeBracket.COLLEGE)
     game.date = 'Fri 5/22'
@@ -175,7 +180,7 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
     self.assertEqual(game, actual_games[0])
 
     # Verify full parsing of one bracket game.
-    game = score_reporter_crawler.GameInfo('72034', url,
+    game = score_reporter_crawler.GameInfo('72034', full_url, name,
         scores_messages.Division.OPEN,
         scores_messages.AgeBracket.COLLEGE)
     game.date = '5/25/2015 2:30 PM'
@@ -192,7 +197,7 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
     self.assertEqual(game, actual_games[40])
 
     # Verify full parsing of one placement bracket game.
-    game = score_reporter_crawler.GameInfo('72047', url,
+    game = score_reporter_crawler.GameInfo('72047', full_url, name,
         scores_messages.Division.OPEN,
         scores_messages.AgeBracket.COLLEGE)
     game.date = '5/24/2015 8:30 AM'

@@ -84,6 +84,7 @@ class GameModelTest(unittest.TestCase):
 
   def testGameSerialization_fromGameInfo(self):
     game_info = score_reporter_crawler.GameInfo('id', 'tourney_id',
+        'tourney_name',
         scores_messages.Division.OPEN,
         scores_messages.AgeBracket.NO_RESTRICTION)
     converted_game = game_model.Game.FromGameInfo(game_info)

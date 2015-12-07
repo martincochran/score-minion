@@ -31,13 +31,22 @@ EVENT_PREFIX = 'http://play.usaultimate.org/events/'
 class GameInfo(object):
   """Text-only representation of the game in score reporter."""
 
-  def __init__(self, id, tourney_id, division, age_bracket):
+  def __init__(self, id, tourney_id, name, division, age_bracket):
+    """Builds GameInfo object.
+
+    Args:
+      id: Unique ID of game, supplied by score reporter
+      tourney_id: Full tournament URL for this division / age bracket
+      name: Name of tournament (part of URL)
+      division: scores_messages.Division value
+      age_bracket: scores_messages.AgeBracket value
+    """
     self.id = id
     self.created_at = datetime.utcnow()
     self.division = division
     self.age_bracket = age_bracket
     self.tourney_id = tourney_id
-    self.tourney_name = ''
+    self.tourney_name = name
     self.date = ''
     self.time = ''
     self.field = ''
@@ -226,7 +235,7 @@ class ScoreReporterCrawler(object):
 
     return tourney
 
-  def ParseGameInfos(self, content, existing_games, url, division,
+  def ParseGameInfos(self, content, existing_games, url, name, division,
       age_bracket):
     """Parses the games and scores for them for all games on the page.
 
@@ -234,12 +243,14 @@ class ScoreReporterCrawler(object):
       content: Full HTML contents of the tourney scores page.
       existing_games: Existing games in this time period.
       url: URL of tourney scores page.
+      name: Name of tournament (part of URL)
       division: Division of this game
       age_bracket: Age bracket of the game.
     Returns:
       A list of GameInfo objects.
     """
-    parser = GameInfosParser(url, division, age_bracket)
+    full_url = '%s%s' % (EVENT_PREFIX, url)
+    parser = GameInfosParser(full_url, name, division, age_bracket)
     parser.feed(content)
     return parser.get_games()
 
@@ -482,11 +493,12 @@ class GameInfosParser(HTMLParser):
 
   _TAGS_OF_INTEREST = ['table', 'tr', 'span', 'a', 'div', 'h4', 'th']
 
-  def __init__(self, url, division, age_bracket):
+  def __init__(self, url, name, division, age_bracket):
     HTMLParser.__init__(self)
     self.division = division
     self.age_bracket = age_bracket
     self.url = url
+    self.name = name
     self.games = []
     self.last_data_type = ''
     self.in_pool_play_scores_table = False
@@ -513,7 +525,8 @@ class GameInfosParser(HTMLParser):
         # New game, add it to the list.
         if name == 'data-game':
           self.games.append(
-              GameInfo(value, self.url, self.division, self.age_bracket))
+              GameInfo(value, self.url, self.name, self.division,
+                self.age_bracket))
           self.games[-1].pool_name = self.pool_name
           return
 
@@ -548,7 +561,8 @@ class GameInfosParser(HTMLParser):
           # IDs are different in bracket games. They are of the form
           # 'game12345' where '12345' is the game id.
           self.games.append(
-              GameInfo(value[4:], self.url, self.division, self.age_bracket))
+              GameInfo(value[4:], self.url, self.name, self.division,
+                self.age_bracket))
           self.games[-1].bracket_title = self.bracket_title
           return
 
@@ -577,7 +591,7 @@ class GameInfosParser(HTMLParser):
     if tag == 'tr':
       self.last_data_type = ''
     if tag == 'table':
-      logging.info('out of table')
+      logging.debug('out of table')
       self.in_pool_play_scores_table = False
 
     if tag == 'h4':
@@ -596,7 +610,7 @@ class GameInfosParser(HTMLParser):
       return
 
     if self._in_tag['th'] and data.find('Pool') == 0:
-      logging.info('data w/ Pool: %s', data)
+      logging.debug('data w/ Pool: %s', data)
       self.pool_name = data[0:6]
 
     if self._in_tag['span']:

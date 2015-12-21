@@ -219,7 +219,7 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
     expected_team_info.name = 'Texas (TUFF)'
     expected_team_info.city = 'Austin,Texas'
     expected_team_info.facebook_url = 'https://www.facebook.com/TexasUltimate'
-    expected_team_info.twitter_screenname = '@texasultimate'
+    expected_team_info.twitter_screenname = 'texasultimate'
     expected_team_info.website = 'http://texasultimate.wix.com/texasultimate'
     expected_team_info.age_bracket = 'College'
     expected_team_info.division = 'Men\'s'

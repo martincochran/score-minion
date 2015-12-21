@@ -26,6 +26,7 @@ import tweets
 
 DEFAULT_GAME_DB_NAME = 'game_db'
 DEFAULT_TEAM_TABLE_NAME = 'team_db'
+FULL_INFO_TABLE_NAME = 'full_team_info_db'
 SR_TEAM_TABLE_NAME = 'team_db'
 
 class GameModelError(Exception):
@@ -62,6 +63,10 @@ def team_twitter_key(team_twitter_id, team_table_name=DEFAULT_TEAM_TABLE_NAME):
 
 def team_score_reporter_key(team_sr_id, team_table_name=SR_TEAM_TABLE_NAME):
   return ndb.Key('Team', '%s_%s' % (team_table_name, team_sr_id)) 
+
+
+def full_team_info_key(team_sr_id, team_table_name=FULL_INFO_TABLE_NAME):
+  return ndb.Key('FullTeamInfo', '%s_%s' % (team_table_name, team_sr_id))
 
 
 class TeamIdLookup(ndb.Model):
@@ -109,6 +114,44 @@ class Team(ndb.Model):
     team.score_reporter_id = self.score_reporter_id
     return team
 
+
+class FullTeamInfo(ndb.Model):
+  """Model version of the info available on score reporter for a team."""
+  # Score reporter ID.
+  id = ndb.StringProperty('sr_u')
+
+  name = ndb.StringProperty('n')
+
+  # TODO: do maps API lookup and change to geo pt.
+  #city = ndb.StringProperty('c')
+
+  age_bracket = msgprop.EnumProperty(scores_messages.AgeBracket, 'a')
+
+  division = msgprop.EnumProperty(scores_messages.Division, 'd')
+
+  # Twitter screen name
+  screen_name = ndb.StringProperty('t')
+
+  # Team website.
+  website = ndb.StringProperty('u')
+
+  # Facebook URL.
+  facebook_url = ndb.StringProperty('f')
+
+  @classmethod
+  def FromTeamInfo(cls, team_info, division, age_bracket, key=None):
+    """Creates a FullTeamInfo object from a sr_crawler.TeamInfo object."""
+    return FullTeamInfo(
+        id=team_info.id,
+        name=team_info.name,
+        # city=team_info.city,
+        age_bracket=age_bracket,
+        division=division,
+        website=team_info.website,
+        screen_name=team_info.twitter_screenname,
+        facebook_url=team_info.facebook_url,
+        key=key,
+    )
 
 class GameSource(ndb.Model):
   # Which type of game source is this?
@@ -255,6 +298,7 @@ class Game(ndb.Model):
                 league=proto_obj.league,
                 age_bracket=proto_obj.age_bracket,
                 sources=[GameSource.FromProto(proto_obj.last_update_source)],
+                # TODO: change this to key=?
                 parent=game_key(proto_obj))
 
   @classmethod

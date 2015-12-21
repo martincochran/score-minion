@@ -716,7 +716,7 @@ class TeamInfoParser(HTMLParser):
         if name == 'action':
           href = value
       if href:
-        logging.info('found team url: %s', href)
+        logging.debug('found team url: %s', href)
         self.team_id_url = href
 
     if tag == 'p':
@@ -747,7 +747,7 @@ class TeamInfoParser(HTMLParser):
       self.team_id_url = ''
 
     if tag == 'div':
-      logging.info('out of table')
+      logging.debug('out of table')
       self.in_team_info_div = False
          
   def handle_data(self, data):
@@ -755,7 +755,7 @@ class TeamInfoParser(HTMLParser):
       return
 
     if self._in_tag['h4'] and data.strip():
-      logging.info('in team name: %s', data)
+      logging.debug('in team name: %s', data)
       self.team_info.name = data.strip()
       return
 
@@ -776,7 +776,15 @@ class TeamInfoParser(HTMLParser):
         self.team_info.website = data.strip()
         return
       if self.in_twitter_screenname:
-        self.team_info.twitter_screenname = data.strip()
+        # TODO: play.usaultimate.org allows any ol' string in this
+        # field, so we need to do our best to normalize the data...
+        # Some examples:
+        #  - https://twitter.com/SubZeroUltimate (note capitalization)
+        #  - MadisonClub (note capitalization)
+        #  - https://twitter.com/txshowdown
+        #  - @texasultimate
+        #  - (empty string; team is Fury)
+        self.team_info.twitter_screenname = data[1:].strip()
         return
       if self.in_facebook_url:
         self.team_info.facebook_url = data.strip()

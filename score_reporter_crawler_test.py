@@ -230,6 +230,18 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
     content = self.testdata.GetTeamFullPage()
     self.assertEqual(expected_team_info, self.crawler.GetTeamInfo(content))
 
+  def testTeamInfoParser(self):
+    parser = score_reporter_crawler.TeamInfoParser()
+
+    expected_values = [
+        ('subzeroultimate', 'https://twitter.com/SubZeroUltimate'),
+        ('madisonclub', 'MadisonClub'),
+        ('txshowdown', 'https://twitter.com/txshowdown'),
+        ('texasultimate', '@texasultimate'),
+        ('', ''),
+    ]
+    for k, v in expected_values:
+      self.assertEqual(k, parser.parse_twitter_screen_name(v))
  
 if __name__ == '__main__':
   unittest.main()

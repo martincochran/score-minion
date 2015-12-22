@@ -499,7 +499,7 @@ class Tweet(ndb.Model):
   @classmethod
   def __BuildObject(cls, tweet_id, insert, **kwargs):
     if insert:
-      return Tweet.get_or_insert('id_str', **kwargs)
+      return Tweet.get_or_insert(tweet_id, **kwargs)
     else:
       return cls(id=tweet_id, **kwargs)
 
@@ -546,7 +546,7 @@ class User(ndb.Model):
   # User-defined name
   name = ndb.StringProperty('n')  # eg, "Martin Cochran"
 
-  # User-defined handle.  Can change.
+  # User-defined handle.  Can change.  Always stored as lowercase string.
   screen_name = ndb.StringProperty('sn')  # eg, "martin_cochran"
 
   # User-defined location - arbitrary string.
@@ -663,7 +663,7 @@ class User(ndb.Model):
         id_str=id_str,
         id_64=id_64,
         name=json_obj.get('name', ''),
-        screen_name=json_obj.get('screen_name', ''),
+        screen_name=json_obj.get('screen_name', '').lower(),
         location=json_obj.get('location', ''),
         description=json_obj.get('description', ''),
         url=json_obj.get('url', ''),
@@ -686,6 +686,6 @@ class User(ndb.Model):
   @classmethod
   def __BuildObject(cls, user_id, insert, **kwargs):
     if insert:
-      return User.get_or_insert('id_str', **kwargs)
+      return User.get_or_insert(user_id, **kwargs)
     else:
       return cls(id=user_id, **kwargs)

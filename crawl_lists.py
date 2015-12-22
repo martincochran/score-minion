@@ -420,8 +420,20 @@ class CrawlUserHandler(webapp2.RequestHandler):
       model_user = tweets.User.getOrInsertFromJson(json_user)
       json_user_url = json_user.get('profile_image_url_https', '')
       # Update the user profile URL if it has changed.
+      changed = False
       if model_user and model_user.profile_image_url_https != json_user_url:
         model_user.profile_image_url_https = json_user_url
+        changed = True
+
+      # If the user screen name is not already lower case, update it.
+      logging.info('checking screen name')
+      screen_name = json_user.get('screen_name', '').lower()
+      if model_user and model_user.screen_name != screen_name:
+        logging.info('screen name updating from %s to %s',
+            model_user.screen_name, screen_name)
+        model_user.screen_name = screen_name
+        changed = True
+      if changed:
         model_user.put()
 
       # Clean-up: only need to do once on production data.
@@ -544,9 +556,17 @@ class CrawlListHandler(webapp2.RequestHandler):
       model_user = tweets.User.getOrInsertFromJson(json_twt.get('user', {}))
       json_user_url = json_twt.get('user', {}).get(
           'profile_image_url_https', '')
+      json_screen_name = json_twt.get('user', {}).get(
+          'screen_name', '').lower()
+      changed = False
       # Update the user profile URL if it has changed.
       if model_user and model_user.profile_image_url_https != json_user_url:
         model_user.profile_image_url_https = json_user_url
+        changed = True
+      if model_user and model_user.screen_name != json_screen_name:
+        model_user.screen_name = json_screen_name
+        changed = True
+      if changed:
         model_user.put()
       if model_user and not users.get(model_user.id_str, None):
         users[model_user.id_str] = model_user

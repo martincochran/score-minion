@@ -207,6 +207,31 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertEquals(0, len(calls))
 
   @mock.patch.object(taskqueue, 'add')
+  def testCrawlList_updateScreenName(self, mock_add_queue):
+    self.CreateUser(3, 'alice').put()
+    user_query = tweets.User.query().filter(tweets.User.id_64 == 3)
+    users = user_query.fetch(1)
+    # Update the case of the screen_name
+    users[0].screen_name = 'Alice'
+    users[0].put()
+    self.assertUserDbContents(['3'])
+    now = datetime.utcnow()
+    fake_tweets = [
+        self.CreateTweet(4, ('alice', 3), created_at=now + timedelta(1, 0, 0)),
+    ]
+    self.SetTimelineResponse(list(fake_tweets))
+
+    response = self.testapp.get('/tasks/crawl_list?list_id=123')
+    self.assertEqual(200, response.status_int)
+
+    self.assertTweetDbContents(['4'], '123')
+    self.assertUserDbContents(['3'])
+    user_query = tweets.User.query().filter(tweets.User.id_64 == 3)
+    users = user_query.fetch(1)
+    self.assertEquals(1, len(users))
+    self.assertEquals('alice', users[0].screen_name)
+
+  @mock.patch.object(taskqueue, 'add')
   def testCrawlList_tweetsWithGames(self, mock_add_queue):
     now = datetime.utcnow()
     fake_tweets = [
@@ -550,21 +575,16 @@ class CrawlListsTest(web_test_base.WebTestBase):
         queue_name='lookup-users'))
     
   @mock.patch.object(taskqueue, 'add')
-  def testCrawlUsers_multipleUsers(self, mock_add_queue):
-    """Ensure crawl_users handles case when there many users."""
+  def testCrawlUsers_newScreenName(self, mock_add_queue):
+    """Ensure crawl_users updates screen_names if they have changed."""
     # Create the canonical user.
     bob = self.CreateUser(2, 'bob')
     key = bob.key
-    tweets.User.getOrInsertFromJson(json.loads(bob.toJsonString()))
+    json_obj = json.loads(bob.toJsonString())
+    json_obj.get('user', {})['screen_name'] = 'Bob'
+    tweets.User.getOrInsertFromJson(json_obj)
 
-    # Now create a duplicate as if there was a data cleanup error.
-    bob = self.CreateUser(2, 'bob')
-    bob.put()
-
-    self.assertUserDbContents(['2', '2'])
-
-    # Update the profile URL
-    bob.profile_image_url_https = 'u'
+    self.assertUserDbContents(['2'])
 
     self.SetJsonResponse('[%s]' % bob.toJsonString())
     response = self.testapp.post('/tasks/crawl_users', params={
@@ -575,7 +595,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     # Assert that the profile URL was updated in the db.
     users = tweets.User.query().fetch()
-    self.assertEquals('u', users[0].profile_image_url_https)
+    self.assertEquals('bob', users[0].screen_name)
 
   @mock.patch.object(taskqueue, 'add')
   def testUpdateLists_cronEntryPoint(self, mock_add_queue):

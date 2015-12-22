@@ -776,15 +776,7 @@ class TeamInfoParser(HTMLParser):
         self.team_info.website = data.strip()
         return
       if self.in_twitter_screenname:
-        # TODO: play.usaultimate.org allows any ol' string in this
-        # field, so we need to do our best to normalize the data...
-        # Some examples:
-        #  - https://twitter.com/SubZeroUltimate (note capitalization)
-        #  - MadisonClub (note capitalization)
-        #  - https://twitter.com/txshowdown
-        #  - @texasultimate
-        #  - (empty string; team is Fury)
-        self.team_info.twitter_screenname = data[1:].strip()
+        self.team_info.twitter_screenname = self.parse_twitter_screen_name(data)
         return
       if self.in_facebook_url:
         self.team_info.facebook_url = data.strip()
@@ -793,6 +785,14 @@ class TeamInfoParser(HTMLParser):
     if self._in_tag['p'] and self.in_city_tag:
       self.team_info.city = data.strip()
       self.in_city_tag = False
+
+  def parse_twitter_screen_name(self, data):
+    if not data:
+      return data
+    data = data.strip().lower()
+    if data[0] == '@':
+      return data[1:]
+    return data.split('/')[-1]
 
   def get_team_info(self):
     return self.team_info

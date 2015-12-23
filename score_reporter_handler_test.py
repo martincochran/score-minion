@@ -324,8 +324,8 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
   def testParseTeamInfo_srTeamExists(self):
     """Don't update db if Team with this sr ID already exists."""
     id = 'njcj4s6Ct8EmLJyC98tkMEP3YQC5QiKs33MnNEu9jp0%3d'
-    team = game_model.Team(score_reporter_id=id)
-    team.put()
+    team = game_model.Team.get_or_insert(id,
+        score_reporter_id=id)
     self._runParseTeamTest()
 
   def testParseTeamInfo_fullTeamInfoExists(self):

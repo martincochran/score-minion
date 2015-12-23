@@ -253,43 +253,19 @@ class TeamHandler(webapp2.RequestHandler):
     #    ID if appropriate and return.
     # 2. If the Twitter ID is not found, that means this is a team not yet
     #    being crawled by Twitter. Add a Team entry with SR ID and move on.
-    #
-    # In either case, update the FullTeamInfo score reporter data if
-    # appropriate.
-    logging.info('querying user: %s', team_info.twitter_screenname)
+    team = game_model.Team.get_or_insert(
+        team_info.id, score_reporter_id=team_info.id)
+    if not team_info.twitter_screenname or team.twitter_id:
+      return
+
+    logging.debug('querying user: %s', team_info.twitter_screenname)
     query = tweets.User.query(
         tweets.User.screen_name == team_info.twitter_screenname)
     users = query.fetch(1)
-
-    # TODO: refactor this logic to make it clearer
-    # We know about this team via Twitter.
     if users:
-      twitter_id = users[0].id_64
-      query = game_model.Team.query(
-          game_model.Team.twitter_id == twitter_id)
-      teams = query.fetch(1)
-      if teams:
-        # Everything is updated, return.
-        if teams[0].score_reporter_id:
-          return
-        # Update score reporter id.
-        teams[0].score_reporter_id = team_info.id
-        teams[0].put
-      else:
-        team = game_model.Team(
-            twitter_id=users[0].id_64,
-            score_reporter_id=team_info.id)
-        team.put()
-      return
-    # We don't know the user.
-    query = game_model.Team.query(
-        game_model.Team.score_reporter_id == team_info.id)
-    teams = query.fetch(1)
-    if teams:
-      return
-    team = game_model.Team(score_reporter_id=team_info.id)
-    team.put()
-
+      team.twitter_id = users[0].id_64
+      team.put()
+  
   def _PossiblyStoreFullTeamInfo(self, team_info, division, age_bracket):
     """If we don't know about this team, update the FullTeamInfo.
 

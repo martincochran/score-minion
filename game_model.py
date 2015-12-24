@@ -287,6 +287,7 @@ class Game(ndb.Model):
     """Builds a Game object from a protobuf object."""
     if not proto_obj.last_update_source:
       raise GameModelError('No update source specified in Game creation.')
+    # TODO: refactor all constructors into one base function like in tweets.
     return Game(id_str=proto_obj.id_str,
                 teams=[Team.FromProto(tm) for tm in proto_obj.teams],
                 scores=proto_obj.scores,
@@ -298,8 +299,7 @@ class Game(ndb.Model):
                 league=proto_obj.league,
                 age_bracket=proto_obj.age_bracket,
                 sources=[GameSource.FromProto(proto_obj.last_update_source)],
-                # TODO: change this to key=?
-                parent=game_key(proto_obj))
+                key=game_key(proto_obj))
 
   @classmethod
   def FromTweet(cls, twt, teams, scores, division, age_bracket, league):
@@ -330,14 +330,14 @@ class Game(ndb.Model):
         created_at=twt.created_at,
         last_modified_at=twt.created_at,
         sources=[GameSource.FromTweet(twt)],
-        parent=game_key_full(game_id))
+        key=game_key_full(game_id))
 
   @classmethod
   def FromGameInfo(cls, info):
     """Builds Game from GameInfo object crawled from Score Reporter."""
-    # Build team objects
+    # TODO: Build team objects
     teams = []
-    # Parse scores
+    # TODO: Parse scores
     scores = []
     name = info.bracket_title or info.pool_name
     status = scores_messages.GameStatus.UNKNOWN
@@ -354,12 +354,12 @@ class Game(ndb.Model):
         division=info.division,
         age_bracket=info.age_bracket,
         league=scores_messages.League.USAU,
+        game_status=status,
         created_at=info.created_at,
         last_modified_at=datetime.datetime.utcnow(),
         # TODO: create proper source
         sources=[],
-        # TODO: need to use another ID in order for game lookups to be consistent
-        parent=game_key_full(info.id))
+        key=game_key_full(info.id))
 
 
   def ToProto(self):

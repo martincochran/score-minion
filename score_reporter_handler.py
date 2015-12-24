@@ -178,11 +178,11 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       game = game_model.Game.FromGameInfo(game_info)
 
       db_game = game_model.game_key(game).get()
-      if db_game:
-        # TODO: update the relevant fields (teams, score, status,
-        # last_modified_at) and update the game
+      if not db_game:
+        game.put()
         continue
-      game.put()
+      if self._ShouldUpdateGame(db_game, game):
+        game.put()
 
     # TODO: do this before writing the game to the DB. Add the team
     # info to the game if it exists.
@@ -199,6 +199,22 @@ class TournamentScoresHandler(webapp2.RequestHandler):
             'age_bracket': age_bracket,
           },
           queue_name='score-reporter')
+
+  def _ShouldUpdateGame(self, db_game, incoming_game):
+    """Returns true if any fields in incoming_game are more recent than db_game.
+
+    Both game objects refer to the same data (same score reporter game ID).
+
+    Args:
+      db_game: Game info from the database
+      incoming_game: Parsed game from the page.
+    """
+    if incoming_game.game_status != db_game.game_status:
+      return True
+    for i in range(len(incoming_game.scores)):
+      if incoming_game.scores[i] != db_game.scores[i]:
+        return True
+    return False
   
   def _ParseTourneyId(self, link):
     return link.split('=')[1]
@@ -295,7 +311,7 @@ class TeamHandler(webapp2.RequestHandler):
     key = game_model.full_team_info_key(team_info.id)
     info_pb = key.get()
     if info_pb:
-      # TODO: check to see if fields have changed and update.
+      # TODO(P2): check to see if fields have changed and update.
       return
 
     info_pb = game_model.FullTeamInfo.FromTeamInfo(team_info,

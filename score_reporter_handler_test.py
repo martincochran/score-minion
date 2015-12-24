@@ -287,6 +287,39 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     self.assertEqual(full_url, games[0].tournament_id)
     self.assertEqual('my_tourney', games[0].tournament_name)
 
+  @mock.patch.object(taskqueue, 'add')
+  def testParseTourneyScores_updateDate(self, mock_add_queue):
+    # Page with two teams, one of which has been added to the DB.
+    self.SetHtmlResponse(FAKE_TOURNEY_SCORES_PAGE)
+    params = {
+        'url_suffix': 'schedule/Men/College-Men/',
+        'name': 'my_tourney',
+        'division': 'OPEN',
+        'age_bracket': 'COLLEGE'
+    }
+    # Both teams and the game have already been added to the database.
+    game_model.TeamIdLookup(
+        score_reporter_id='123',
+        score_reporter_tourney_id=['8%3d']).put()
+    game_model.TeamIdLookup(
+        score_reporter_id='456',
+        score_reporter_tourney_id=['g%3d']).put()
+    game_info = score_reporter_crawler.GameInfo(
+        '71984', 'tourney_id', 'my_tourney', scores_messages.Division.OPEN,
+        scores_messages.AgeBracket.COLLEGE)
+    game_info.status = 'Unknown'
+    game = game_model.Game.FromGameInfo(game_info)
+    self.assertEquals(scores_messages.GameStatus.UNKNOWN, game.game_status)
+    game.put()
+    response = self.testapp.get('/tasks/sr/crawl_tournament', params=params)
+    self.assertEqual(200, response.status_int)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+
+    db_game = game_model.game_key(game).get()
+    self.assertEquals(scores_messages.GameStatus.FINAL, db_game.game_status)
+ 
   @mock.patch.object(score_reporter_handler, 'FetchUsauPage')
   @mock.patch.object(taskqueue, 'add')
   def testParseTourneyScores_urlEncoded(self, mock_add_queue, mock_fetch_page):
@@ -342,6 +375,27 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
 
     calls = mock_add_queue.mock_calls
     self.assertEquals(0, len(calls))
+
+  def testShouldUpdateGame_status(self):
+    handler = score_reporter_handler.TournamentScoresHandler()
+    db_game = game_model.Game()
+    incoming_game = game_model.Game()
+    self.assertFalse(handler._ShouldUpdateGame(db_game, incoming_game))
+
+    db_game.game_status = scores_messages.GameStatus.FINAL
+    self.assertTrue(handler._ShouldUpdateGame(db_game, incoming_game))
+
+  def testShouldUpdateGame_scores(self):
+    handler = score_reporter_handler.TournamentScoresHandler()
+    db_game = game_model.Game()
+    incoming_game = game_model.Game()
+    self.assertFalse(handler._ShouldUpdateGame(db_game, incoming_game))
+
+    db_game.scores = [1, 2]
+    incoming_game.scores = [1, 2]
+    self.assertFalse(handler._ShouldUpdateGame(db_game, incoming_game))
+    incoming_game.scores[1] = 3
+    self.assertTrue(handler._ShouldUpdateGame(db_game, incoming_game))
 
   def testParseTeamInfo_sanity(self):
     self._runParseTeamTest()

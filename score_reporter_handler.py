@@ -51,17 +51,16 @@ def FetchUsauPage(url):
     response = urlfetch.fetch(full_url, deadline=FETCH_DEADLINE_SECS)
   except urlfetch.Error as e:
     logging.warning('Could not fetch URL %s: %s', full_url, e)
-    # TODO: if this is a 404, don't throw an error since it's unlikely
-    # that error will change with retries
     raise FetchError(e)
 
-  if response.status_code != 200:
-    raise FetchError('Response code not 200: %s, %s' % (response.status_code,
+  if response.status_code not in [200, 404]:
+    raise FetchError('Response code not 200/404: %s, %s' % (response.status_code,
         response.content))
   return response
 
 
 class ScoreReporterHandler(webapp2.RequestHandler):
+  """Handler for /tasks/sr/crawl."""
 
   # Landing page for score reporter tournaments.
   MAIN_URL = ('tournament/?ViewAll=false&IsLeagueType='
@@ -70,6 +69,10 @@ class ScoreReporterHandler(webapp2.RequestHandler):
   def get(self):
     """Loads the main event page and schedules crawling of all tournaments."""
     response = FetchUsauPage(self.MAIN_URL)
+    if response.status_code != 200:
+      WriteError('Response code not 200 - page %s not found' % self.MAIN_URL,
+          self.response)
+      return
 
     crawler = score_reporter_crawler.ScoreReporterCrawler()
     tournaments = crawler.ParseTournaments(response.content)
@@ -88,16 +91,18 @@ class ScoreReporterHandler(webapp2.RequestHandler):
 
 
 class TournamentLandingPageHandler(webapp2.RequestHandler):
+  """Handler for /tasks/sr/list_tournament_details."""
   def get(self):
     """Schedules crawling for each division on the tourney landing page."""
     url = self.request.get('name', '')
     if not url:
-      msg = 'No tournament name specified'
-      logging.warning(msg)
-      self.response.write(msg)
+      WriteError('No tournament name specified', self.response)
       return
 
     response = FetchUsauPage(url)
+    if response.status_code != 200:
+      WriteError('Tourney page not found', self.response)
+      return
 
     crawler = score_reporter_crawler.ScoreReporterCrawler()
     tournaments = crawler.GetDivisions(response.content)
@@ -116,6 +121,7 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
 
 
 class TournamentScoresHandler(webapp2.RequestHandler):
+  """Handler for /tasks/sr/crawl_tournament."""
   def get(self):
     """Crawls the scores from the given tournament."""
     url = self.request.get('url_suffix', '')
@@ -124,9 +130,7 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     age_bracket = self.request.get('age_bracket', '')
     
     if not division or not age_bracket:
-      msg = 'Division or age bracket not specified'
-      logging.warning(msg)
-      self.response.write(msg)
+      WriteError('Division or age bracket not specified', self.response)
       return
 
     # TODO: perhaps run this in a try/catch block
@@ -135,14 +139,16 @@ class TournamentScoresHandler(webapp2.RequestHandler):
 
     # TODO: do something with name
     if not url or not name:
-      msg = 'URL or name not specified'
-      logging.warning(msg)
-      self.response.write(msg)
+      WriteError('URL or name not specified', self.response)
       return
 
     url = urllib2.unquote(url)
     name = urllib2.unquote(name)
     response = FetchUsauPage('%s/%s' % (name, url))
+    if response.status_code != 200:
+      WriteError('Response code not 200 - page %s/%s not found' % (name, url),
+          self.response)
+      return
 
     crawler = score_reporter_crawler.ScoreReporterCrawler()
     # TODO: look to see if tourney is already in DB. If not, then
@@ -196,6 +202,7 @@ class TournamentScoresHandler(webapp2.RequestHandler):
 
 
 class TeamHandler(webapp2.RequestHandler):
+  """Handler for /tasks/sr/crawl_team."""
   def get(self):
     """Loads the team page and crawls it."""
     id = self.request.get('id', '')
@@ -207,6 +214,10 @@ class TeamHandler(webapp2.RequestHandler):
 
     crawler = score_reporter_crawler.ScoreReporterCrawler()
     response = FetchUsauPage('/teams/?EventTeamId=%s' % id)
+    if response.status_code != 200:
+      WriteError('Response code not 200 - team %s not found' % id,
+          self.response)
+      return
     team_info = crawler.GetTeamInfo(response.content)
 
     # Add the team to the database, if appropriate.
@@ -283,6 +294,17 @@ class TeamHandler(webapp2.RequestHandler):
     info_pb = game_model.FullTeamInfo.FromTeamInfo(team_info,
         division, age_bracket, key=key)
     info_pb.put()
+
+
+def WriteError(msg, response):
+  """Convenience function to both log and write an error message.
+
+  Args:
+    msg: Error message to be logged and written to the response.
+    response: response object.
+  """
+  logging.error(msg)
+  response.write(msg)
 
 
 app = webapp2.WSGIApplication([

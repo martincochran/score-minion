@@ -181,6 +181,15 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     self.assertEquals(0, len(calls))
 
   @mock.patch.object(taskqueue, 'add')
+  def testParseLandingPage_404(self, mock_add_queue):
+    self.SetHtmlResponse('', 404)
+    response = self.testapp.get('/tasks/sr/crawl')
+    self.assertEqual(200, response.status_int)
+    self.assertIn('not found', response.body)
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+
+  @mock.patch.object(taskqueue, 'add')
   def testParseTourneyLandingPage(self, mock_add_queue):
     self.SetHtmlResponse(FAKE_TOURNEY_LANDING_PAGE)
     # Need to add the tourney URL to the URL as a parameter
@@ -204,6 +213,16 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     # present no crawling should take place.
     response = self.testapp.get('/tasks/sr/list_tournament_details')
     self.assertEquals(0, response.body.find('No tournament name specified'))
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+
+  @mock.patch.object(taskqueue, 'add')
+  def testParseTourneyLandingPage_404(self, mock_add_queue):
+    self.SetHtmlResponse('', 404)
+    response = self.testapp.get(
+        '/tasks/sr/list_tournament_details?name=no_name')
+    self.assertEqual(200, response.status_int)
+    self.assertEquals(0, response.body.find('Tourney page not found'))
     calls = mock_add_queue.mock_calls
     self.assertEquals(0, len(calls))
 
@@ -294,6 +313,22 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     calls = mock_add_queue.mock_calls
     self.assertEquals(0, len(calls))
 
+  @mock.patch.object(taskqueue, 'add')
+  def testParseTourneyScores_404(self, mock_add_queue):
+    self.SetHtmlResponse('', 404)
+    params = {
+        'url_suffix': 'schedule%2FWomen%2FClub-Women%2F',
+        'name': 'US-Open-Ultimate-Championships-2015%2F',
+        'division': 'WOMENS',
+        'age_bracket': 'NO_RESTRICTION'
+    }
+    response = self.testapp.get('/tasks/sr/crawl_tournament', params=params)
+    self.assertEqual(200, response.status_int)
+    self.assertIn('not found', response.body)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+
   def testParseTeamInfo_sanity(self):
     self._runParseTeamTest()
 
@@ -344,6 +379,18 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
         key=key)
     info_pb.put()
     self._runParseTeamTest()
+
+  @mock.patch.object(taskqueue, 'add')
+  def testParseTeam_404(self, mock_add_queue):
+    self.SetHtmlResponse('', 404)
+    params = {
+        'id': 'g%3d',
+        'division': 'OPEN',
+        'age_bracket': 'COLLEGE',
+    }
+    response = self.testapp.get('/tasks/sr/crawl_team', params=params)
+    self.assertEqual(200, response.status_int)
+    self.assertIn('not found', response.body)
 
   def _runParseTeamTest(self, twitter_id=None):
     self.SetHtmlResponse(FAKE_TEAM_INFO_PAGE)

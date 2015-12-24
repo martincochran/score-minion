@@ -133,11 +133,14 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       WriteError('Division or age bracket not specified', self.response)
       return
 
-    # TODO: perhaps run this in a try/catch block
-    enum_division = scores_messages.Division(division)
-    enum_age_bracket = scores_messages.AgeBracket(age_bracket)
+    help(scores_messages.Division)
+    try: 
+      enum_division = scores_messages.Division(division)
+      enum_age_bracket = scores_messages.AgeBracket(age_bracket)
+    except TypeError as e:
+      logging.error('Could not parse params as enum: %s', e)
+      return
 
-    # TODO: do something with name
     if not url or not name:
       WriteError('URL or name not specified', self.response)
       return
@@ -209,8 +212,12 @@ class TeamHandler(webapp2.RequestHandler):
     division = self.request.get('division', '')
     age_bracket = self.request.get('age_bracket', '')
 
-    enum_division = scores_messages.Division(division)
-    enum_age_bracket = scores_messages.AgeBracket(age_bracket)
+    try:
+      enum_division = scores_messages.Division(division)
+      enum_age_bracket = scores_messages.AgeBracket(age_bracket)
+    except TypeError as e:
+      logging.error('Could not parse params as enum: %s', e)
+      return
 
     crawler = score_reporter_crawler.ScoreReporterCrawler()
     response = FetchUsauPage('/teams/?EventTeamId=%s' % id)

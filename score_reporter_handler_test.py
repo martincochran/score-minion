@@ -314,6 +314,20 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     self.assertEquals(0, len(calls))
 
   @mock.patch.object(taskqueue, 'add')
+  def testParseTourneyScores_badEnumParsing(self, mock_add_queue):
+    params = {
+        'url_suffix': 'schedule%2FWomen%2FClub-Women%2F',
+        'name': 'US-Open-Ultimate-Championships-2015%2F',
+        'division': 'BAD_ENUM',
+        'age_bracket': 'NO_RESTRICTION'
+    }
+    response = self.testapp.get('/tasks/sr/crawl_tournament', params=params)
+    self.assertEqual(200, response.status_int)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+
+  @mock.patch.object(taskqueue, 'add')
   def testParseTourneyScores_404(self, mock_add_queue):
     self.SetHtmlResponse('', 404)
     params = {
@@ -380,8 +394,7 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     info_pb.put()
     self._runParseTeamTest()
 
-  @mock.patch.object(taskqueue, 'add')
-  def testParseTeam_404(self, mock_add_queue):
+  def testParseTeam_404(self):
     self.SetHtmlResponse('', 404)
     params = {
         'id': 'g%3d',
@@ -391,6 +404,16 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     response = self.testapp.get('/tasks/sr/crawl_team', params=params)
     self.assertEqual(200, response.status_int)
     self.assertIn('not found', response.body)
+
+  def testParseTeam_badEnum(self):
+    self.SetHtmlResponse('', 200)
+    params = {
+        'id': 'g%3d',
+        'division': 'OPEN',
+        'age_bracket': 'BAD_ENUM',
+    }
+    response = self.testapp.get('/tasks/sr/crawl_team', params=params)
+    self.assertEqual(200, response.status_int)
 
   def _runParseTeamTest(self, twitter_id=None):
     self.SetHtmlResponse(FAKE_TEAM_INFO_PAGE)

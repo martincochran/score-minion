@@ -83,14 +83,61 @@ class GameModelTest(unittest.TestCase):
     self.assertEquals(1, len(converted_game.sources))
 
   def testGameSerialization_fromGameInfo(self):
+    game_info = score_reporter_crawler.GameInfo('id', 'tourney_url',
+        'tourney_name',
+        scores_messages.Division.OPEN,
+        scores_messages.AgeBracket.NO_RESTRICTION)
+    game_info.home_team_score = '5'
+    game_info.away_team_score = '6'
+    game_info.status = 'Final'
+    game_info.home_team_link = 'a'
+    game_info.away_team_link = 'b'
+    url_map = {'a': '123', 'b': '456'}
+    converted_game = game_model.Game.FromGameInfo(game_info, url_map)
+
+    self.assertEqual(scores_messages.Division.OPEN,
+        converted_game.division)
+    self.assertEqual(scores_messages.AgeBracket.NO_RESTRICTION,
+        converted_game.age_bracket)
+    self.assertEqual('id', converted_game.id_str)
+    self.assertEqual('tourney_url', converted_game.tournament_id)
+    self.assertEqual('tourney_name', converted_game.tournament_name)
+    self.assertEqual([5, 6], converted_game.scores)
+    self.assertEqual(scores_messages.GameStatus.FINAL,
+        converted_game.game_status)
+
+    self.assertEqual(1, len(converted_game.sources))
+    date = datetime.datetime.utcnow()
+    source = game_model.GameSource(
+        type=scores_messages.GameSourceType.SCORE_REPORTER,
+        score_reporter_url='tourney_url',
+        update_date_time=date)
+    converted_game.sources[0].update_date_time=date
+    self.assertEqual([source], converted_game.sources)
+
+    self.assertEqual(2, len(converted_game.teams))
+    self.assertEqual('123', converted_game.teams[0].score_reporter_id)
+    self.assertEqual('456', converted_game.teams[1].score_reporter_id)
+
+  def testGameSerialization_fromGameInfoNonNumberScores(self):
     game_info = score_reporter_crawler.GameInfo('id', 'tourney_id',
         'tourney_name',
         scores_messages.Division.OPEN,
         scores_messages.AgeBracket.NO_RESTRICTION)
-    converted_game = game_model.Game.FromGameInfo(game_info)
+    game_info.home_team_score = 'W'
+    game_info.away_team_score = 'L'
+    converted_game = game_model.Game.FromGameInfo(game_info, {})
+    self.assertEqual([1, -1], converted_game.scores)
 
-    # TODO: create a proper game source and verify that here
-    self.assertEquals(0, len(converted_game.sources))
+    game_info.home_team_score = 'l'
+    game_info.away_team_score = 'w'
+    converted_game = game_model.Game.FromGameInfo(game_info, {})
+    self.assertEqual([-1, 1], converted_game.scores)
+
+    game_info.home_team_score = 'nonsense'
+    game_info.away_team_score = 'nonsense'
+    converted_game = game_model.Game.FromGameInfo(game_info, {})
+    self.assertEqual([-1, -1], converted_game.scores)
 
   def testTeamSerialization(self):
     """Verify serialization between Team protobuf and ndb classes."""

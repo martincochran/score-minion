@@ -19,4 +19,10 @@ The full data for each Twitter user or score reporter team is stored
 in an object for each source (tweets.User and game\_model.FullTeamInfo,
 respectively).
 
+## Tournament and Game IDs
+
+If the game is from score reporter, the score reporter-assigned game or 
+tournament ID is used. If the game is only known on Twitter, a random
+number is generated for the ID.
+
 Author: Martin Cochran

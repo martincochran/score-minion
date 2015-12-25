@@ -133,7 +133,6 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       WriteError('Division or age bracket not specified', self.response)
       return
 
-    help(scores_messages.Division)
     try: 
       enum_division = scores_messages.Division(division)
       enum_age_bracket = scores_messages.AgeBracket(age_bracket)
@@ -170,35 +169,53 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     game_infos = crawler.ParseGameInfos(response.content, existing_games,
         full_url, name, enum_division, enum_age_bracket)
 
-    team_tourney_ids = set()
     for game_info in game_infos:
-      team_tourney_ids.add(self._ParseTourneyId(game_info.home_team_link))
-      team_tourney_ids.add(self._ParseTourneyId(game_info.away_team_link))
+      self._HandleGame(game_info, enum_division, enum_age_bracket)
 
-      game = game_model.Game.FromGameInfo(game_info)
+  def _HandleGame(self, game_info, division, age_bracket):
+    """Check and maybe update the parsed game info object against the datastore .
 
-      db_game = game_model.game_key(game).get()
-      if not db_game:
-        game.put()
-        continue
-      if self._ShouldUpdateGame(db_game, game):
-        game.put()
+    Args:
+      game_info: score_reporter_crawler.GameInfo object.
+      division: scores_messages.Division division of team
+      age_bracket: scores_messages.AgeBracket age bracket of team
+    """
+    team_tourney_ids = set()
+    team_tourney_ids.add((self._ParseTourneyId(game_info.home_team_link),
+      game_info.home_team_link))
+    team_tourney_ids.add((self._ParseTourneyId(game_info.away_team_link),
+      game_info.away_team_link))
 
-    # TODO: do this before writing the game to the DB. Add the team
-    # info to the game if it exists.
-    for team_tourney_id in team_tourney_ids:
+    team_tourney_map = {}
+    found_all = True
+    for team_tourney_id, url in team_tourney_ids:
       query = game_model.TeamIdLookup.query(
           game_model.TeamIdLookup.score_reporter_tourney_id == team_tourney_id)
       teams = query.fetch(1)
       if teams:
+        team_tourney_map[url] = teams[0].score_reporter_id
         continue
+      found_all = False
       taskqueue.add(url='/tasks/sr/crawl_team', method='GET',
           params={
             'id': team_tourney_id,
-            'division': division,
-            'age_bracket': age_bracket,
-          },
-          queue_name='score-reporter')
+            'division': '%s' % division,
+            'age_bracket': '%s' % age_bracket,
+          }, queue_name='score-reporter')
+
+    # If all the teams are not in the database yet, wait until they are crawled
+    # so we can add the team's canonical ID (rather than the
+    # tournament-specific ID).
+    if not found_all:
+      logging.info('Did not find all teams in db for %s', game_info.tourney_id)
+      return
+
+    # OK - both teams are known and game should be added to DB if it
+    # is new or updated.
+    game = game_model.Game.FromGameInfo(game_info, team_tourney_map)
+    db_game = game_model.game_key(game).get()
+    if self._ShouldUpdateGame(db_game, game):
+      game.put()
 
   def _ShouldUpdateGame(self, db_game, incoming_game):
     """Returns true if any fields in incoming_game are more recent than db_game.
@@ -209,11 +226,16 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       db_game: Game info from the database
       incoming_game: Parsed game from the page.
     """
+    # If the game is not in the datastore yet, definitely update it.
+    if not db_game:
+      return True
     if incoming_game.game_status != db_game.game_status:
       return True
     for i in range(len(incoming_game.scores)):
       if incoming_game.scores[i] != db_game.scores[i]:
         return True
+    # TODO: update game if the main team ids are now known (as opposed to just
+    # the tourney-specific ids)
     return False
   
   def _ParseTourneyId(self, link):

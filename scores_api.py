@@ -90,6 +90,10 @@ class ScoresApi(remote.Service):
       if source and source.twitter_account:
         self._AddTwitterAccountInfo(
             proto_game.last_update_source.twitter_account)
+      # TODO: implement something like the following:
+      #if source and source.score_reporter_id:
+        #self._AddTwitterAccountInfo(
+            #proto_game.last_update_source.score_reporter_id)
 
     return response
 

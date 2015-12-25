@@ -258,9 +258,9 @@ class Game(ndb.Model):
 
   name = ndb.StringProperty('n')
 
+  # Score reporter ID, if game exists in score reporter. Otherwise,
+  # randomly chosen.
   tournament_id = ndb.StringProperty('tid')
-
-  # TODO: consider adding a separate ID for score reporter
 
   tournament_name = ndb.StringProperty('tn')
 
@@ -333,12 +333,36 @@ class Game(ndb.Model):
         key=game_key_full(game_id))
 
   @classmethod
-  def FromGameInfo(cls, info):
-    """Builds Game from GameInfo object crawled from Score Reporter."""
-    # TODO: Build team objects
-    teams = []
-    # TODO: Parse scores
+  def FromGameInfo(cls, info, team_tourney_map):
+    """Builds Game from GameInfo object crawled from Score Reporter.
+
+    Args:
+      info: score_reporter_crawler.GameInfo object
+      team_tourney_map: Map from tournament-specific team links to
+        stable IDs. info.home_team_link and info.away_team_link must
+        be present in the map.
+    """
+    teams = [
+        Team(score_reporter_id=team_tourney_map.get(info.home_team_link, '')),
+        Team(score_reporter_id=team_tourney_map.get(info.away_team_link, '')),
+    ]
+
     scores = []
+    try:
+      scores = [int(info.home_team_score),
+          int(info.away_team_score)]
+    except ValueError as e:
+      if info.home_team_score.strip().lower() == 'w':
+        scores = [1, -1]
+      elif info.away_team_score.strip().lower() == 'w':
+        scores = [-1, 1]
+      else:
+        # Unknown scores
+        scores = [-1, -1]
+    source = GameSource(type=scores_messages.GameSourceType.SCORE_REPORTER,
+        score_reporter_url=info.tourney_id,
+        update_date_time=datetime.datetime.utcnow()) 
+      
     name = info.bracket_title or info.pool_name
     status = scores_messages.GameStatus.UNKNOWN
     if info.status.lower() == 'final':
@@ -347,8 +371,6 @@ class Game(ndb.Model):
         name=name,
         teams=teams,
         scores=scores,
-        # TODO: this means the tourney ID will be score-reporter
-        # generated. This may or may not be a good thing.
         tournament_id=info.tourney_id,
         tournament_name=info.tourney_name,
         division=info.division,
@@ -357,8 +379,7 @@ class Game(ndb.Model):
         game_status=status,
         created_at=info.created_at,
         last_modified_at=datetime.datetime.utcnow(),
-        # TODO: create proper source
-        sources=[],
+        sources=[source],
         key=game_key_full(info.id))
 
 

@@ -193,7 +193,7 @@ class ScoreReporterCrawler(object):
 
     Args:
       content: Full HTML contents of tourney landing page.
-      url: URL of tourney landing page.
+      url: URL of tourney landing page, relative to EVENT_PREFIX.
       division: Text-format of Division protobuf ('OPEN', eg)
       age_bracket: Text-format of AgeBracket protobuf ('COLLEGE', eg)
 
@@ -242,10 +242,10 @@ class ScoreReporterCrawler(object):
     Args:
       content: Full HTML contents of the tourney scores page.
       existing_games: Existing games in this time period.
-      url: URL of tourney scores page.
-      name: Name of tournament (part of URL)
-      division: Division of this game
-      age_bracket: Age bracket of the game.
+      url: URL of tourney scores page, relative to EVENT_PREFIX.
+      name: Name of tournament (part of URL).
+      division: scores_messages.Division for this game.
+      age_bracket: scores_messages.AgeBracket for this game.
     Returns:
       A list of GameInfo objects.
     """
@@ -577,9 +577,9 @@ class GameInfosParser(HTMLParser):
         if name == 'href':
           href = value
       if self.last_data_type == 'game-team-home':
-        self.games[-1].home_team_link = href
+        self.games[-1].home_team_link = href.strip()
       if self.last_data_type == 'game-team-away':
-        self.games[-1].away_team_link = href
+        self.games[-1].away_team_link = href.strip()
 
   def handle_endtag(self, tag):
     if tag not in self._TAGS_OF_INTEREST:

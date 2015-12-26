@@ -82,18 +82,11 @@ class ScoresApi(remote.Service):
 
       # Populate the team info in the response.
       for team in proto_game.teams:
-        if not team.twitter_account:
-          continue
-        self._AddTwitterAccountInfo(team.twitter_account)
+        self._AddAccountInfo(team.twitter_account,
+            team.score_reporter_account)
 
       source = proto_game.last_update_source
-      if source and source.twitter_account:
-        self._AddTwitterAccountInfo(
-            proto_game.last_update_source.twitter_account)
-      # TODO: implement something like the following:
-      #if source and source.score_reporter_id:
-        #self._AddTwitterAccountInfo(
-            #proto_game.last_update_source.score_reporter_id)
+      self._AddAccountInfo(source.twitter_account, None)
 
     return response
 
@@ -127,9 +120,7 @@ class ScoresApi(remote.Service):
 
     # Add team info to response
     for team in response.game.teams:
-      if not team.twitter_account:
-        continue
-      self._AddTwitterAccountInfo(team.twitter_account)
+      self._AddAccountInfo(team.twitter_account, team.score_reporter_account)
 
     num_sources = request.max_num_sources
     if not num_sources:
@@ -143,6 +134,8 @@ class ScoresApi(remote.Service):
             response.twitter_sources[-1].twitter_account)
       else:
         response.score_reporter_source = source.ToProto()
+        self._AddScoreReporterAccountInfo(
+            response.twitter_source.score_reporter_account)
       num_added_sources += 1
       if num_added_sources >= num_sources:
         break
@@ -198,6 +191,18 @@ class ScoresApi(remote.Service):
     taskqueue.add(url='/tasks/crawl_all_lists', method='GET',
         queue_name='list-statuses')
 
+  def _AddAccountInfo(self, twitter_account, score_reporter_account):
+    """Populate account fields with full account info.
+
+    Args:
+      twitter_account: scores_messages.TwitterAccount object.
+      score_reporter_account: scores_messages.ScoreReporterAccount object.
+    """
+    if twitter_account:
+      self._AddTwitterAccountInfo(twitter_account)
+    if score_reporter_account:
+      self._AddScoreReporterAccountInfo(score_reporter_account)
+
   @staticmethod
   def _AddTwitterAccountInfo(twitter_account):
     """Populate TwitterAccount with additional data from the datastore.
@@ -205,7 +210,6 @@ class ScoresApi(remote.Service):
     Args:
       twitter_account: scores_messages.TwitterAccount object
     """
-    # TODO: save all users in memcache
     user_id = twitter_account.id_str
     account_query = tweets.User.query().order(tweets.User.screen_name)
     account_query = account_query.filter(tweets.User.id_str == user_id)
@@ -215,6 +219,24 @@ class ScoresApi(remote.Service):
     twitter_account.screen_name = user[0].screen_name
     twitter_account.user_defined_name = user[0].name
     twitter_account.profile_image_url_https = user[0].profile_image_url_https
+
+  @staticmethod
+  def _AddScoreReporterAccountInfo(score_reporter_account):
+    """Populate ScoreReporterAccount with additional data from the datastore.
+
+    Args:
+      score_reporter_account: scores_messages.ScoreReporterAccount object
+    """
+    id = score_reporter_account.id
+    if not id:
+      return
+    info = game_model.full_team_info_key(id).get()
+    if not info:
+      return
+    score_reporter_account.name = info.name
+    score_reporter_account.team_website = info.website
+    score_reporter_account.facebook_url = info.facebook_url
+    # TODO: add team image url
 
 
 app = endpoints.api_server([ScoresApi], restricted=False)

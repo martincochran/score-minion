@@ -29,6 +29,7 @@ DEFAULT_TEAM_TABLE_NAME = 'team_db'
 FULL_INFO_TABLE_NAME = 'full_team_info_db'
 SR_TEAM_TABLE_NAME = 'team_db'
 
+
 class GameModelError(Exception):
   pass
 
@@ -90,13 +91,19 @@ class Team(ndb.Model):
   @classmethod
   def FromProto(cls, proto_obj):
     """Creates a Team object from a scores_messages.Team object."""
+    key=None
     if proto_obj.twitter_account:
       twitter_id = long(proto_obj.twitter_account.id_str)
+      # TODO: find some better strategy than this dual-key thing.
       key = team_twitter_key(twitter_id)
     else:
       twitter_id = 0
-      key = team_score_reporter_key(proto_obj.score_reporter_id)
-    return Team(twitter_id=twitter_id, score_reporter_id=proto_obj.score_reporter_id,
+    if proto_obj.score_reporter_account:
+      score_reporter_id = proto_obj.score_reporter_account.id
+      key = team_score_reporter_key(score_reporter_id)
+    else:
+      score_reporter_id = ''
+    return Team(twitter_id=twitter_id, score_reporter_id=score_reporter_id,
                 parent=key)
 
   @classmethod
@@ -111,7 +118,10 @@ class Team(ndb.Model):
       account = scores_messages.TwitterAccount()
       account.id_str = str(self.twitter_id)
       team.twitter_account = account
-    team.score_reporter_id = self.score_reporter_id
+    if self.score_reporter_id:
+      account = scores_messages.ScoreReporterAccount()
+      account.id = self.score_reporter_id
+      team.score_reporter_account = account
     return team
 
 

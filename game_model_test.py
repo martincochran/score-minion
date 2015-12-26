@@ -46,6 +46,7 @@ class GameModelTest(unittest.TestCase):
     game.last_update_source = scores_messages.GameSource()
     game.last_update_source.update_time_utc_str = 'Wed Dec 10 21:00:24 2014'
     game.last_update_source.score_reporter_url = 'http://a.b.c/'
+    game.last_update_source.type = scores_messages.GameSourceType.SCORE_REPORTER
     self.assertEquals(game, game_model.Game.FromProto(game).ToProto())
 
   def testGameSerialization_noDateSpecified(self):
@@ -146,7 +147,9 @@ class GameModelTest(unittest.TestCase):
     account = scores_messages.TwitterAccount()
     account.id_str = '1234'
     team.twitter_account = account
-    team.score_reporter_id = 'a.b.c'
+    account = scores_messages.ScoreReporterAccount()
+    account.id = 'a.b.c'
+    team.score_reporter_account = account
     self.assertEquals(team, game_model.Team.FromProto(team).ToProto())
 
     # Twitter account only
@@ -158,7 +161,9 @@ class GameModelTest(unittest.TestCase):
 
     # SR sccount only
     team = scores_messages.Team()
-    team.score_reporter_id = 'a.b.c'
+    account = scores_messages.ScoreReporterAccount()
+    account.id = 'a.b.c'
+    team.score_reporter_account = account
     self.assertEquals(team, game_model.Team.FromProto(team).ToProto())
 
   def testTeamFromUser(self):

@@ -62,17 +62,32 @@ class TwitterAccount(messages.Message):
   profile_image_url_https = messages.StringField(4)
 
 
+class ScoreReporterAccount(messages.Message):
+  # Team name.
+  name = messages.StringField(1)
+
+  # Score-reporter ID.
+  id = messages.StringField(2)
+
+  # Score-reporter URL (for convenience).
+  url = messages.StringField(3)
+
+  # TODO: crawl and add URL link.
+  profile_image_url_https = messages.StringField(4)
+
+  # Website of team.
+  team_website = messages.StringField(5)
+
+  facebook_url = messages.StringField(6)
+
 class Team(messages.Message):
   """Message to identify a team. At least one field must be present."""
   # Twitter account info.  At least screen_name or id_str must be present to
   # uniquely identify the team if passing as a request parameter.
   twitter_account = messages.MessageField(TwitterAccount, 1)
 
-  # URL of score reporter page for that team.
-  score_reporter_id = messages.StringField(2)
-
-  # Tournament-specific tournament ID associated with this team.
-  score_reporter_tourney_id = messages.StringField(3, repeated=True)
+  # Account info for score reporter account.
+  score_reporter_account = messages.MessageField(ScoreReporterAccount, 2)
 
 
 class GameSourceType(messages.Enum):

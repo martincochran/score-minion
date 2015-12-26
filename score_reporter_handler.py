@@ -231,6 +231,8 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       return True
     if incoming_game.game_status != db_game.game_status:
       return True
+    # TODO: this isn't correct. If a Twitter update occurs after a SR update,
+    # this will always overwrite the Twitter score.
     for i in range(len(incoming_game.scores)):
       if incoming_game.scores[i] != db_game.scores[i]:
         return True

@@ -34,8 +34,10 @@ from scores_messages import League
 
 import webapp2
 
+import games
 import list_id_bimap
 import oauth_token_manager
+import scores_messages
 import tweets
 import twitter_fetcher
 
@@ -65,7 +67,7 @@ FIRST_TWEET_IN_STREAM_ID = 2L
 
 # Threshold for consistency score where we add a tweet to a game instead of
 # creating a new one.
-GAME_CONSISTENCY_THRESHOLD = 1.0
+GAME_CONSISTENCY_THRESHOLD = 0.5
 
 # Maximum users per user crawl request.
 MAX_USERS_PER_CRAWL_REQUEST = 100
@@ -780,7 +782,7 @@ class CrawlListHandler(webapp2.RequestHandler):
     scores = [twt.entities.integers[score_indicies[0]].num,
           twt.entities.integers[score_indicies[1]].num]
     (consistency_score, game) = self._FindMostConsistentGame(
-        twt, existing_games, added_games, teams, division, age_bracket, league)
+        twt, existing_games, added_games, teams, division, age_bracket, league, scores)
 
     # Try to find a game that matches this tweet in existing games. If no such
     # game exists, create one.
@@ -799,7 +801,7 @@ class CrawlListHandler(webapp2.RequestHandler):
       self._MergeTeamsIntoGame(game, teams)
 
   def _FindMostConsistentGame(self, twt, existing_games, added_games, teams,
-      division, age_bracket, league):
+      division, age_bracket, league, scores):
     """Returns the game most consistent with the given games.
 
     If no game is found to be at all consistent, the consistency score returned
@@ -817,6 +819,8 @@ class CrawlListHandler(webapp2.RequestHandler):
       division: Division to set new Game to, if creating one
       age_bracket: AgeBracket to set new Game to, if creating one
       league: League to set new Game to, if creating one
+      scores: list with two elements [first_score, last_score], where
+        first_score is the first integer to appear in the tweet text.
 
     Returns:
       A (score, game) pair of the game that matches mostly closely with the
@@ -835,11 +839,28 @@ class CrawlListHandler(webapp2.RequestHandler):
 
           # So one of the teams is the same. If this game happened within the last few
           # hours it's probably the same game.
-          # TODO(NEXT): do something more sophisticated based on the score updates in the game.
-          # eg, even if the tweet already exists in some game this might add it again.
           max_game_length = timedelta(hours=MAX_LENGTH_OF_GAME_IN_HOURS)
-          if abs(twt.created_at - game.last_modified_at) < max_game_length:
-            return (1.0, game)
+          if abs(twt.created_at - game.last_modified_at) >= max_game_length:
+            return (0.0, None)
+
+          new_scores = games.Scores.FromList(scores, ordered=False)
+          last_source = game.sources[-1]
+          type = last_source.type
+          old_scores = games.Scores.FromList(game.scores,
+              ordered=(type == scores_messages.GameSourceType.SCORE_REPORTER))
+
+          logging.info('tweet: %s, game: %s', twt, game)
+          # Handles case where this is the first tweet we've seen of this game
+          # since a new crawl.
+          if new_scores >= old_scores:
+            if twt.created_at >= last_source.update_date_time:
+              return (1.0, game)
+
+          # Handles case where this is a tweet we've seen of this game
+          # during this crawl but not the first in this crawl.
+          if new_scores <= old_scores:
+            if twt.created_at <= last_source.update_date_time:
+              return (1.0, game)
         
     return (0.0, None)
 

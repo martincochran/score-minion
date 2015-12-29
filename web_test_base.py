@@ -134,11 +134,11 @@ class WebTestBase(unittest.TestCase):
       twts: A single tweets.Tweet object or list of tweets.Tweet objects.
     """
     if type(twts) == tweets.Tweet:
-      self.SetJsonResponse('[%s]' % twts.toJsonString())
+      self.SetJsonResponse('[%s]' % twts.ToJsonString())
       return
 
     if type(twts) == list:
-      self.SetJsonResponse('[%s]' % ','.join([t.toJsonString() for t in twts]))
+      self.SetJsonResponse('[%s]' % ','.join([t.ToJsonString() for t in twts]))
       return
 
     raise WebTestError('Bad argument to SetTimelineResponse: %s', twts)

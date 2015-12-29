@@ -50,7 +50,7 @@ WEB_CLIENT_ID = '245407672402-oisb05fsubs9l96jfdfhn4tnmju4efqe.apps.googleuserco
 
 
 USAU_PREFIX = 'https://play.usaultimate.org'
-# TODO: add Android client ID
+# TODO(P2): add Android client ID
 
 
 @endpoints.api(name='scores', version='v1',
@@ -108,7 +108,7 @@ class ScoresApi(remote.Service):
     """
     response = GameInfoResponse()
     if not request.game_id_str:
-      # TODO: throw error?
+      # TODO(P2): throw error?
       return response
     games_query = game_model.Game.query(
         game_model.Game.id_str == request.game_id_str).order(
@@ -156,7 +156,7 @@ class ScoresApi(remote.Service):
       The list of game_model.Game objects that match the criteria.
     """
     # Currently the only request filter is by division.
-    # TODO: support other filters (by tournament, eg)
+    # TODO(P2): support other filters (by tournament, eg)
     games_query = game_model.Game.query()
     if request.division:
       games_query = games_query.filter(game_model.Game.division == request.division)

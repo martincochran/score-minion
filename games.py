@@ -64,7 +64,6 @@ class Scores(object):
       b = sorted(b)
     home = cmp(a[0], b[0])
     away = cmp(a[1], b[1])
-    logging.info('home: %s, away: %s', home, away)
     if home >= 0 and away >= 0:
       return home + away
     if home < 0 and away < 0:

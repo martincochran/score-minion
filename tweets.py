@@ -503,8 +503,7 @@ class Tweet(ndb.Model):
     else:
       return cls(id=tweet_id, **kwargs)
 
-  # TODO: Don't use java camel-casing.
-  def toJsonString(self):
+  def ToJsonString(self):
     """Write this object to json string.
     
     Only suitable for testing at the moment.  Not idempotent when composed with
@@ -630,8 +629,7 @@ class User(ndb.Model):
     """Builds a User object from a json object."""
     return User.__BuildConstructorArgs(json_obj, False)
 
-  # TODO: Don't use java camel-casing.
-  def toJsonString(self):
+  def ToJsonString(self):
     """Write this object to json string.
     
     Only suitable for testing at the moment.  Not idempotent when composed with

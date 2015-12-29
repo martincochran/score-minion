@@ -215,7 +215,7 @@ class ScoreReporterCrawler(object):
 
     city, state = parser.get_location()
 
-    # TODO: make call to Maps API to get geo pt.
+    # TODO(P2): make call to Maps API to get geo pt.
     #   *OR* use URL from FieldMap link. But only do this if the
     #   tournament (or sub-tournament) is new. In crawling a tourney
     #   like nationals, first one division will be added and then
@@ -229,7 +229,7 @@ class ScoreReporterCrawler(object):
         url=url)
 
     date_fmt_str = '%M/%d/%Y'
-    # TODO(use date/time appropriate for location)
+    # TODO(P2: use date/time appropriate for location)
     if parser.get_start_date():
       tourney.start_date = datetime.strptime(
           parser.get_start_date(), date_fmt_str)
@@ -342,7 +342,7 @@ class DivisionParser(HTMLParser):
           if value.strip() == 'Club':
             added_division = True
             self._age_brackets.append(scores_messages.AgeBracket.NO_RESTRICTION)
-          # TODO: handle other age brackets
+          # TODO(P2): handle other age brackets
           if not added_division:
             return
 

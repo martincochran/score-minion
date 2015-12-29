@@ -54,8 +54,8 @@ class OauthPlaygroundTest(web_test_base.WebTestBase):
     lookup_user_response = '[{"id_str": "789", "screen_name": "alice"}]'
 
     self.return_statuscode = [200, 200, 200, 200]
-    self.return_content = [twt.toJsonString(), lookup_lists_response,
-                           list_twt.toJsonString(), lookup_user_response]
+    self.return_content = [twt.ToJsonString(), lookup_lists_response,
+                           list_twt.ToJsonString(), lookup_user_response]
 
     params = {
       'account': 'test_account',

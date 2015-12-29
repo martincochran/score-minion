@@ -77,7 +77,12 @@ class TeamIdLookup(ndb.Model):
 
 
 class Team(ndb.Model):
-  """Information to identify a team in the games database."""
+  """Information to identify a team in the games database.
+
+  Only of the of fields is required. If both are specified, the Twitter
+  ID is used.
+  
+  """
   # ID of associated account on Twitter
   twitter_id = ndb.IntegerProperty('t_id')
 
@@ -90,7 +95,6 @@ class Team(ndb.Model):
     key=None
     if proto_obj.twitter_account:
       twitter_id = long(proto_obj.twitter_account.id_str)
-      # TODO: find some better strategy than this dual-key thing.
       key = team_twitter_key(twitter_id)
     else:
       twitter_id = 0
@@ -128,7 +132,7 @@ class FullTeamInfo(ndb.Model):
 
   name = ndb.StringProperty('n')
 
-  # TODO: do maps API lookup and change to geo pt.
+  # TODO(P2): do maps API lookup and change to geo pt.
   #city = ndb.StringProperty('c')
 
   age_bracket = msgprop.EnumProperty(scores_messages.AgeBracket, 'a')
@@ -303,7 +307,7 @@ class Game(ndb.Model):
     """Builds a Game object from a protobuf object."""
     if not proto_obj.last_update_source:
       raise GameModelError('No update source specified in Game creation.')
-    # TODO: refactor all constructors into one base function like in tweets.
+    # TODO(P2): refactor all constructors into one base function like in tweets.
     return Game(id_str=proto_obj.id_str,
                 teams=[Team.FromProto(tm) for tm in proto_obj.teams],
                 scores=proto_obj.scores,

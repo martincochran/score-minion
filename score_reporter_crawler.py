@@ -121,14 +121,15 @@ class TeamInfo(object):
     self.website = ''
     self.twitter_screenname = ''
     self.facebook_url = ''
-    # TODO: consider these fields as well
-    # self.coach = ''
-    # self.asst_coach = ''
+    self.image_link = ''
+    self.coach = ''
+    self.asst_coach = ''
 
   def __str__(self):
-    return 'Team %s (%s): %s, %s, %s, %s\n%s\n%s' % (
+    return 'Team %s (%s): %s, %s, %s, %s\n%s\n%s, %s, %s, %s' % (
         self.name, self.id, self.city, self.age_bracket,
-        self.division, self.website, self.twitter_screenname, self.facebook_url)
+        self.division, self.website, self.twitter_screenname, self.facebook_url,
+        self.image_link, self.coach, self.asst_coach)
 
   def __repr__(self):
     return self.__str__()
@@ -153,6 +154,12 @@ class TeamInfo(object):
       return cmp(self.twitter_screenname, other.twitter_screenname)
     if self.facebook_url != other.facebook_url:
       return cmp(self.facebook_url, other.facebook_url)
+    if self.image_link != other.image_link:
+      return cmp(self.image_link, other.image_link)
+    if self.coach != other.coach:
+      return cmp(self.coach, other.coach)
+    if self.asst_coach != other.asst_coach:
+      return cmp(self.asst_coach, other.asst_coach)
     return 0
 
 
@@ -655,13 +662,14 @@ class GameInfosParser(HTMLParser):
 class TeamInfoParser(HTMLParser):
   """Parses the team info from the team page (main or tourney)."""
 
-  _TAGS_OF_INTEREST = ['div', 'p', 'dd', 'dt', 'a', 'h4', 'form', 'body']
+  _TAGS_OF_INTEREST = ['div', 'img', 'p', 'dd', 'dt', 'a', 'h4', 'form', 'body']
 
   def __init__(self):
     HTMLParser.__init__(self)
     self.games = []
     self.last_data_type = ''
     self.in_team_info_div = False
+    self.in_team_image_div = False
     self.in_website = False
     self.in_twitter_screenname = False
     self.in_facebook_url = False
@@ -681,6 +689,8 @@ class TeamInfoParser(HTMLParser):
       for name, value in attrs:
         if name == 'class' and value.find('profile_info') != -1:
           self.in_team_info_div = True
+        if name == 'class' and value.find('profile_img') != -1:
+          self.in_team_image_div = True
 
     # If we're not in the team div, ignore everything else.
     if not (self.in_team_info_div or self._in_tag['body']):
@@ -723,6 +733,12 @@ class TeamInfoParser(HTMLParser):
         if name == 'class' and value.find('team_city') != -1:
           self.in_city_tag = True
 
+    if tag == 'img' and self.in_team_image_div:
+      for name, value in attrs:
+        if name == 'src':
+          self.team_info.image_link = value.strip()
+
+
   def handle_endtag(self, tag):
     if not self.in_team_info_div:
       return
@@ -746,8 +762,8 @@ class TeamInfoParser(HTMLParser):
       self.team_id_url = ''
 
     if tag == 'div':
-      logging.debug('out of table')
       self.in_team_info_div = False
+      self.in_team_image_div = False
          
   def handle_data(self, data):
     if not self.in_team_info_div:
@@ -768,6 +784,12 @@ class TeamInfoParser(HTMLParser):
         self.dt_data = ''
       if self.dt_data.find('Gender Division') != -1:
         self.team_info.division = data.strip()
+        self.dt_data = ''
+      if self.dt_data.find('Head Coach') != -1:
+        self.team_info.coach = data.strip()
+        self.dt_data = ''
+      if self.dt_data.find('Asst.Coach') != -1:
+        self.team_info.asst_coach = data.strip()
         self.dt_data = ''
 
     if self._in_tag['a']:

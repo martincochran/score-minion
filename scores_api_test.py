@@ -32,6 +32,7 @@ import endpoints
 from endpoints import api_config
 
 import game_model
+import score_reporter_crawler
 import tweets
 
 # Mock out the endpoints method
@@ -128,6 +129,69 @@ class ScoresApiTest(web_test_base.WebTestBase):
     request.age_bracket = scores_messages.AgeBracket.MASTERS
     response = self.api.GetGames(request)
     self.assertEquals(0, len(response.games))
+
+  @mock.patch.object(app_identity, 'app_identity')
+  @mock.patch.object(taskqueue, 'add')
+  def testGetGames_scoreReporterGame(self, mock_add_queue, mock_app_identity):
+    """Verify the API handles the case where a SR game is returned."""
+    mock_app_identity.get_default_version_hostname = mock.MagicMock()
+    mock_app_identity.get_default_version_hostname.return_value = 'production host'
+
+    user = self.CreateUser(2, 'bob')
+    user.put()
+
+    teams = [game_model.Team(score_reporter_id='a'),
+        game_model.Team(score_reporter_id='b')]
+    info = score_reporter_crawler.GameInfo(
+        'a', 'b', 'name', scores_messages.Division.WOMENS,
+        scores_messages.AgeBracket.NO_RESTRICTION)
+    info.home_team_link = 'c'
+    info.away_team_link = 'd'
+    team_tourney_map = {
+        'c': 'e',
+        'd': 'f',
+    }
+    game = game_model.Game.FromGameInfo(info, team_tourney_map)
+    game.put()
+    self.assertGameDbSize(1)
+
+    team_info = game_model.FullTeamInfo(
+        key=game_model.full_team_info_key('e'),
+        id='e',
+        name='name',
+        age_bracket=scores_messages.AgeBracket.NO_RESTRICTION,
+        division=scores_messages.Division.WOMENS,
+        website='website',
+        screen_name='twitter_screenname',
+        facebook_url='facebook_url',
+        image_link='image_link',
+        coach='coach',
+        asst_coach='asst_coach')
+    team_info.put()
+
+    # Request with all operators
+    request = scores_messages.GamesRequest()
+    request.league = scores_messages.League.USAU
+    request.division = scores_messages.Division.WOMENS
+    request.age_bracket = scores_messages.AgeBracket.NO_RESTRICTION
+
+    response = self.api.GetGames(request)
+    self.assertEquals(1, len(response.games))
+    self.assertEquals(2, len(response.games[0].teams))
+
+    account = scores_messages.ScoreReporterAccount(
+        id='e',
+        name='name',
+        team_website='website',
+        facebook_url='facebook_url',
+        profile_image_url_https='%s%s' % (scores_api.USAU_PREFIX, 'image_link'),
+        coach='coach',
+        asst_coach='asst_coach')
+    self.assertEquals(account,
+        response.games[0].teams[0].score_reporter_account)
+    account = scores_messages.ScoreReporterAccount(id='f')
+    self.assertEquals(account,
+        response.games[0].teams[1].score_reporter_account)
 
   @mock.patch.object(app_identity, 'app_identity')
   @mock.patch.object(taskqueue, 'add')

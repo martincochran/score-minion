@@ -144,6 +144,13 @@ class FullTeamInfo(ndb.Model):
   # Facebook URL.
   facebook_url = ndb.StringProperty('f')
 
+  # Link to team profile image
+  image_link = ndb.StringProperty('i')
+
+  coach = ndb.StringProperty('co')
+
+  asst_coach = ndb.StringProperty('aco')
+
   @classmethod
   def FromTeamInfo(cls, team_info, division, age_bracket, key=None):
     """Creates a FullTeamInfo object from a sr_crawler.TeamInfo object."""
@@ -156,8 +163,12 @@ class FullTeamInfo(ndb.Model):
         website=team_info.website,
         screen_name=team_info.twitter_screenname,
         facebook_url=team_info.facebook_url,
+        image_link=team_info.image_link,
+        coach=team_info.coach,
+        asst_coach=team_info.asst_coach,
         key=key,
     )
+
 
 class GameSource(ndb.Model):
   # Which type of game source is this?

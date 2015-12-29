@@ -213,6 +213,44 @@ class GameModelTest(unittest.TestCase):
 
     self.assertFalse(game == None)
 
+  def testFullTeamInfoSerialization(self):
+    """Verify serialization between TeamInfo and the ndb class."""
+    team_info = score_reporter_crawler.TeamInfo()
+    team_info.id = 'team id'
+    team_info.name = 'name'
+    team_info.website = 'a'
+    team_info.twitter_screenname = 'b'
+    team_info.facebook_url = 'c'
+    team_info.image_link = 'd'
+    team_info.coach = 'e'
+    team_info.asst_coach = 'f'
+
+    expected_team_info = game_model.FullTeamInfo(
+        id=team_info.id,
+        name=team_info.name,
+        age_bracket=scores_messages.AgeBracket.NO_RESTRICTION,
+        division=scores_messages.Division.WOMENS,
+        website=team_info.website,
+        screen_name=team_info.twitter_screenname,
+        facebook_url=team_info.facebook_url,
+        image_link=team_info.image_link,
+        coach=team_info.coach,
+        asst_coach=team_info.asst_coach)
+    self.assertEqual(game_model.FullTeamInfo.FromTeamInfo(team_info,
+      scores_messages.Division.WOMENS,
+      scores_messages.AgeBracket.NO_RESTRICTION),
+        expected_team_info)
+    
+    game = scores_messages.Game()
+    game.id_str = str(uuid.uuid4())
+    game.division = scores_messages.Division.WOMENS
+    game.league = scores_messages.League.WFDF_CLUB
+    game.last_update_source = scores_messages.GameSource()
+    game.last_update_source.update_time_utc_str = 'Wed Dec 10 21:00:24 2014'
+    game.last_update_source.score_reporter_url = 'http://a.b.c/'
+    game.last_update_source.type = scores_messages.GameSourceType.SCORE_REPORTER
+    self.assertEquals(game, game_model.Game.FromProto(game).ToProto())
+
 
 if __name__ == '__main__':
   unittest.main()

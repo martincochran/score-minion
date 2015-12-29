@@ -48,6 +48,8 @@ MAX_HOURS_CRAWL_LATENCY = 1
 # Client ID for testing
 WEB_CLIENT_ID = '245407672402-oisb05fsubs9l96jfdfhn4tnmju4efqe.apps.googleusercontent.com'
 
+
+USAU_PREFIX = 'https://play.usaultimate.org'
 # TODO: add Android client ID
 
 
@@ -236,7 +238,10 @@ class ScoresApi(remote.Service):
     score_reporter_account.name = info.name
     score_reporter_account.team_website = info.website
     score_reporter_account.facebook_url = info.facebook_url
-    # TODO: add team image url
+    score_reporter_account.profile_image_url_https = '%s%s' % (
+        USAU_PREFIX, info.image_link)
+    score_reporter_account.coach = info.coach
+    score_reporter_account.asst_coach = info.asst_coach
 
 
 app = endpoints.api_server([ScoresApi], restricted=False)

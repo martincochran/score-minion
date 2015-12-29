@@ -222,13 +222,16 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
     expected_team_info.age_bracket = 'College'
     expected_team_info.division = 'Men\'s'
     expected_team_info.id = 'njcj4s6Ct8EmLJyC98tkMEP3YQC5QiKs33MnNEu9jp0%3d'
+    expected_team_info.image_link = '/assets/EventPictures/logo.png'
+    expected_team_info.coach = 'CALVIN LIN'
+    expected_team_info.asst_coach = 'WILLIAM CAMPBELL'
     self.assertEqual(expected_team_info, self.crawler.GetTeamInfo(content))
 
     # Check loading the full team page
     content = self.testdata.GetTeamFullPage()
     self.assertEqual(expected_team_info, self.crawler.GetTeamInfo(content))
 
-  def testTeamInfoParser(self):
+  def testParseTwitterScreenName(self):
     parser = score_reporter_crawler.TeamInfoParser()
 
     expected_values = [

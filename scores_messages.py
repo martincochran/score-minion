@@ -72,13 +72,16 @@ class ScoreReporterAccount(messages.Message):
   # Score-reporter URL (for convenience).
   url = messages.StringField(3)
 
-  # TODO: crawl and add URL link.
+  # URL for team image on Score Reporter.
   profile_image_url_https = messages.StringField(4)
 
   # Website of team.
   team_website = messages.StringField(5)
 
   facebook_url = messages.StringField(6)
+
+  coach = messages.StringField(7)
+  asst_coach = messages.StringField(8)
 
 class Team(messages.Message):
   """Message to identify a team. At least one field must be present."""

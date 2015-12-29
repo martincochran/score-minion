@@ -49,10 +49,6 @@ def game_key_full(game_id, game_table_name=DEFAULT_GAME_DB_NAME):
 
 def game_key(proto_obj):
   """Build a key from a scores_messages.Game protobuf object."""
-  # TODO: this probably needs to be the score-reporter game ID of
-  # some sort (SR assigns unique game ids), otherwise there will be
-  # no consistent way for the crawler to determine if a game is
-  # already in the DB.
   return game_key_full(proto_obj.id_str)
 
 
@@ -203,7 +199,6 @@ class GameSource(ndb.Model):
       raise GameModelError('Converting GameSource from malformed proto')
     return source
 
-  # TODO: also add FromScoreReporter once crawling / db is enabled there.
   @classmethod
   def FromTweet(cls, twt):
     return GameSource(type=scores_messages.GameSourceType.TWITTER,

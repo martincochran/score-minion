@@ -235,13 +235,12 @@ class ScoreReporterCrawler(object):
 
     return tourney
 
-  def ParseGameInfos(self, content, existing_games, url, name, division,
+  def ParseGameInfos(self, content, url, name, division,
       age_bracket):
     """Parses the games and scores for them for all games on the page.
 
     Args:
       content: Full HTML contents of the tourney scores page.
-      existing_games: Existing games in this time period.
       url: URL of tourney scores page, relative to EVENT_PREFIX.
       name: Name of tournament (part of URL).
       division: scores_messages.Division for this game.

@@ -104,11 +104,10 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
 
   def testParseGameInfos_singleDivision(self):
     content = self.testdata.GetLinkedScoresPage()
-    existing_games = []
     name = 'East-New-England-Mens-Sectionals-2015'
     url = '%s/%s' % (name, '/schedule/Men/Club-Men/')
-    actual_games =  self.crawler.ParseGameInfos(content, existing_games, url,
-        name, scores_messages.Division.OPEN,
+    actual_games =  self.crawler.ParseGameInfos(content, url, name,
+        scores_messages.Division.OPEN,
         scores_messages.AgeBracket.NO_RESTRICTION)
 
     # No placement brackets for this tournament.
@@ -151,12 +150,11 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
 
   def testParseGameInfos_multipleDivisions(self):
     content = self.testdata.GetMultiDivisionTournamentScoresPage()
-    existing_games = []
     name = 'USA-Ultimate-D-I-College-Championships-2015'
     url = '%s/%s' % (name, 'schedule/Men/College-Men/')
     full_url = '%s/%s' % (score_reporter_crawler.EVENT_PREFIX, url)
-    actual_games = self.crawler.ParseGameInfos(content, existing_games,
-        full_url, name, scores_messages.Division.OPEN,
+    actual_games = self.crawler.ParseGameInfos(content, full_url, name,
+        scores_messages.Division.OPEN,
         scores_messages.AgeBracket.COLLEGE)
 
     self.assertEqual(55, len(actual_games))

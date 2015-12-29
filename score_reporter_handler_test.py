@@ -412,6 +412,12 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     handler = score_reporter_handler.TournamentScoresHandler()
     db_game = game_model.Game()
     incoming_game = game_model.Game()
+    db_game.scores = [0, 0]
+    incoming_game.scores = [0, 0]
+    db_game.sources = [game_model.GameSource(
+        type=scores_messages.GameSourceType.SCORE_REPORTER)]
+    incoming_game.sources = [game_model.GameSource(
+        type=scores_messages.GameSourceType.SCORE_REPORTER)]
     self.assertFalse(handler._ShouldUpdateGame(db_game, incoming_game))
 
     db_game.game_status = scores_messages.GameStatus.FINAL
@@ -421,10 +427,12 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     handler = score_reporter_handler.TournamentScoresHandler()
     db_game = game_model.Game()
     incoming_game = game_model.Game()
-    self.assertFalse(handler._ShouldUpdateGame(db_game, incoming_game))
-
     db_game.scores = [1, 2]
     incoming_game.scores = [1, 2]
+    db_game.sources = [game_model.GameSource(
+        type=scores_messages.GameSourceType.SCORE_REPORTER)]
+    incoming_game.sources = [game_model.GameSource(
+        type=scores_messages.GameSourceType.SCORE_REPORTER)]
     self.assertFalse(handler._ShouldUpdateGame(db_game, incoming_game))
     incoming_game.scores[1] = 3
     self.assertTrue(handler._ShouldUpdateGame(db_game, incoming_game))

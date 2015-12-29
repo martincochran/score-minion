@@ -22,6 +22,7 @@ from google.appengine.api import taskqueue
 from google.appengine.api import urlfetch
 
 import game_model
+import games
 import score_reporter_crawler
 import scores_messages
 import tweets
@@ -153,7 +154,7 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       return
 
     crawler = score_reporter_crawler.ScoreReporterCrawler()
-    # TODO: look to see if tourney is already in DB. If not, then
+    # TODO(P2): look to see if tourney is already in DB. If not, then
     # parse the tourney info from the page (only want to do
     # rarely to avoid using Maps API). It's possible that the
     # tournament exists but the sub-division does not yet exist and
@@ -163,12 +164,8 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     tourney_info = crawler.ParseTournamentInfo(response.content, full_url,
         enum_division, enum_age_bracket)
 
-    # TODO: Lookup games in this time frame or that were crawled from this
-    # score reporter URL.
-    existing_games = []
-    game_infos = crawler.ParseGameInfos(response.content, existing_games,
+    game_infos = crawler.ParseGameInfos(response.content,
         full_url, name, enum_division, enum_age_bracket)
-
     for game_info in game_infos:
       self._HandleGame(game_info, enum_division, enum_age_bracket)
 
@@ -231,14 +228,12 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       return True
     if incoming_game.game_status != db_game.game_status:
       return True
-    # TODO: this isn't correct. If a Twitter update occurs after a SR update,
-    # this will always overwrite the Twitter score.
-    for i in range(len(incoming_game.scores)):
-      if incoming_game.scores[i] != db_game.scores[i]:
-        return True
-    # TODO: update game if the main team ids are now known (as opposed to just
-    # the tourney-specific ids)
-    return False
+
+    new_score = games.Scores.FromList(incoming_game.scores, ordered=True)
+    type = db_game.sources[-1].type
+    old_score = games.Scores.FromList(db_game.scores,
+        ordered=(type == scores_messages.GameSourceType.SCORE_REPORTER))
+    return new_score > old_score
   
   def _ParseTourneyId(self, link):
     return link.split('=')[1]
@@ -273,7 +268,7 @@ class TeamHandler(webapp2.RequestHandler):
     self._PossiblyStoreTeam(team_info)
     self._PossiblyStoreFullTeamInfo(team_info, enum_division, enum_age_bracket)
 
-    # TODO: consider crawling the full team's page to get all games they've
+    # TODO(P2): consider crawling the full team's page to get all games they've
     # played in.
 
   def _PossiblyAddTeamLookup(self, team_id, tourney_id):

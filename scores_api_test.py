@@ -184,6 +184,7 @@ class ScoresApiTest(web_test_base.WebTestBase):
         name='name',
         team_website='website',
         facebook_url='facebook_url',
+        screen_name='twitter_screenname',
         profile_image_url_https='%s%s' % (scores_api.USAU_PREFIX, 'image_link'),
         coach='coach',
         asst_coach='asst_coach')
@@ -299,6 +300,30 @@ class ScoresApiTest(web_test_base.WebTestBase):
     response = self.api.GetGameInfo(request)
     self.assertEquals(1, len(response.twitter_sources))
     self.assertEquals(None, response.score_reporter_source)
+    self.assertEquals(game_id, response.game.id_str)
+
+  @mock.patch.object(app_identity, 'app_identity')
+  @mock.patch.object(taskqueue, 'add')
+  def testGetGameInfo_scoreReporterSource(self, mock_add_queue,
+      mock_app_identity):
+    """Test functionality of GetGameInfo using a SR source."""
+    game_info = score_reporter_crawler.GameInfo(
+        'id', 'tourney_id', 'name', scores_messages.Division.OPEN,
+        scores_messages.AgeBracket.NO_RESTRICTION)
+    team_tourney_map = {
+    }
+    game = game_model.Game.FromGameInfo(game_info, team_tourney_map)
+    game.put()
+    self.assertGameDbSize(1)
+
+    game_id = game.id_str
+
+    request = scores_messages.GameInfoRequest()
+    request.game_id_str = game_id
+    response = self.api.GetGameInfo(request)
+    self.assertEquals(0, len(response.twitter_sources))
+    self.assertEquals('tourney_id',
+        response.score_reporter_source.score_reporter_url)
     self.assertEquals(game_id, response.game.id_str)
 
 

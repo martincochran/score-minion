@@ -83,6 +83,9 @@ class ScoreReporterAccount(messages.Message):
   coach = messages.StringField(7)
   asst_coach = messages.StringField(8)
 
+  # Twitter screen name.
+  screen_name = messages.StringField(9)
+
 class Team(messages.Message):
   """Message to identify a team. At least one field must be present."""
   # Twitter account info.  At least screen_name or id_str must be present to

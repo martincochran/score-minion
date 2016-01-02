@@ -269,7 +269,8 @@ class ScoreReporterCrawler(object):
         the team page with the team ID in the URL and all the team scores from
         the season.
     Returns:
-      The game_model.Team object with the inferred team information.
+      The score_reporter_crawler.TeamInfo object with the inferred team
+      information.
     """
     parser = TeamInfoParser()
     parser.feed(content)

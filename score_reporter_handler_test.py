@@ -296,6 +296,8 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     game_model.TeamIdLookup(
         score_reporter_id='123',
         score_reporter_tourney_id=['8%3d']).put()
+    game_model.Team(twitter_id=5,
+        score_reporter_id='123').put()
     game_model.TeamIdLookup(
         score_reporter_id='456',
         score_reporter_tourney_id=['g%3d']).put()
@@ -318,6 +320,8 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     self.assertEqual([15, 13], games[0].scores)
     self.assertEqual('456', games[0].teams[0].score_reporter_id)
     self.assertEqual('123', games[0].teams[1].score_reporter_id)
+    self.assertEqual(None, games[0].teams[0].twitter_id)
+    self.assertEqual(5, games[0].teams[1].twitter_id)
 
   @mock.patch.object(taskqueue, 'add')
   def testParseTourneyScores_updateDate(self, mock_add_queue):

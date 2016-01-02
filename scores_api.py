@@ -117,7 +117,7 @@ class ScoresApi(remote.Service):
     games = games_query.fetch(1)
     if not games:
       return response
-    logging.info('game returned: %s', games[0])
+    logging.debug('game returned: %s', games[0])
     response.game = games[0].ToProto()
 
     # Add team info to response
@@ -136,8 +136,6 @@ class ScoresApi(remote.Service):
             response.twitter_sources[-1].twitter_account)
       else:
         response.score_reporter_source = source.ToProto()
-        self._AddScoreReporterAccountInfo(
-            response.twitter_source.score_reporter_account)
       num_added_sources += 1
       if num_added_sources >= num_sources:
         break
@@ -156,7 +154,7 @@ class ScoresApi(remote.Service):
       The list of game_model.Game objects that match the criteria.
     """
     # Currently the only request filter is by division.
-    # TODO(P2): support other filters (by tournament, eg)
+    # TODO(P2): support other filters (by team id, eg)
     games_query = game_model.Game.query()
     if request.division:
       games_query = games_query.filter(game_model.Game.division == request.division)
@@ -164,6 +162,10 @@ class ScoresApi(remote.Service):
       games_query = games_query.filter(game_model.Game.age_bracket == request.age_bracket)
     if request.league:
       games_query = games_query.filter(game_model.Game.league == request.league)
+    if request.tournament_id:
+      games_query = games_query.filter(
+          game_model.Game.tournament_id == request.tournament_id_str)
+
     games_query = games_query.order(-game_model.Game.last_modified_at)
 
     count = request.count
@@ -242,6 +244,7 @@ class ScoresApi(remote.Service):
         USAU_PREFIX, info.image_link)
     score_reporter_account.coach = info.coach
     score_reporter_account.asst_coach = info.asst_coach
+    score_reporter_account.screen_name = info.screen_name
 
 
 app = endpoints.api_server([ScoresApi], restricted=False)

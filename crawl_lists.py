@@ -706,8 +706,11 @@ class CrawlListHandler(webapp2.RequestHandler):
     # TODO(ultiworld): this will have to be reconsidered when tweets by 
     # ultiworld are considered.
     teams = {}
+    sr_source = False
     for source in game.sources:
       if source.type != GameSourceType.TWITTER:
+        if source.teams and source.teams[0].score_reporter_id != UNKNOWN_SR_ID:
+          sr_source = True
         continue
       account = source.account_id
       teams[account] = teams.get(account, 0) + 1
@@ -718,7 +721,7 @@ class CrawlListHandler(webapp2.RequestHandler):
     sorted_teams = sorted([(v, k) for (k, v) in teams.items()], reverse=True)
 
     # Take the top 2
-    if not sorted_teams:
+    if not sorted_teams and not sr_source:
       logging.error('Didn\'t find any teams: %s', game)
       return
 
@@ -849,7 +852,6 @@ class CrawlListHandler(webapp2.RequestHandler):
           old_scores = games.Scores.FromList(game.scores,
               ordered=(type == scores_messages.GameSourceType.SCORE_REPORTER))
 
-          logging.info('tweet: %s, game: %s', twt, game)
           # Handles case where this is the first tweet we've seen of this game
           # since a new crawl.
           if new_scores >= old_scores:

@@ -204,12 +204,15 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     # so we can add the team's canonical ID (rather than the
     # tournament-specific ID).
     if not found_all:
-      logging.info('Did not find all teams in db for %s', game_info.tourney_id)
+      logging.debug('Did not find all teams in db for %s', game_info.tourney_id)
       return
 
     # OK - both teams are known and game should be added to DB if it
     # is new or updated.
     game = game_model.Game.FromGameInfo(game_info, team_tourney_map)
+    # Add the Twitter data if known.
+    self._AddTwitterTeamInfo(game)
+
     db_game = game_model.game_key(game).get()
     if self._ShouldUpdateGame(db_game, game):
       game.put()
@@ -234,6 +237,23 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     old_score = games.Scores.FromList(db_game.scores,
         ordered=(type == scores_messages.GameSourceType.SCORE_REPORTER))
     return new_score > old_score
+
+  def _AddTwitterTeamInfo(self, game):
+    """Adds full Twitter info to Game if the Twitter data is known.
+
+    Args:
+      game: game_model.Game object
+    """
+    if not game:
+      return
+    for team in game.teams:
+      # Lookup Team in db to get Twitter info.
+      query = game_model.Team.query(
+          game_model.Team.score_reporter_id == team.score_reporter_id)
+      teams = query.fetch(1)
+      if not teams:
+        continue
+      team.twitter_id = teams[0].twitter_id
   
   def _ParseTourneyId(self, link):
     return link.split('=')[1]

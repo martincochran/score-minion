@@ -124,7 +124,7 @@ class TweetTest(unittest.TestCase):
   def testParseTweet(self):
     """Test parsing an example tweet with some basic info."""
     json_str = ''.join(TWEET_JSON_LINES)
-    twt = tweets.Tweet.fromJson(json.loads(json_str))
+    twt = tweets.Tweet.FromJson(json.loads(json_str))
 
     self.assertEqual('542785926674399232', twt.id_str)
     self.assertTrue(twt.text.find('Your Federal Tax Dollars') != -1)
@@ -187,7 +187,7 @@ class TweetTest(unittest.TestCase):
   def testParseUser(self):
     """Test parsing an example user with some basic info."""
     json_str = ''.join(TWEET_JSON_LINES)
-    user = tweets.User.fromJson(json.loads(json_str).get('user'))
+    user = tweets.User.FromJson(json.loads(json_str).get('user'))
 
     self.assertEqual('568757027', user.id_str)
     self.assertEqual('Martin Cochran', user.name)
@@ -218,14 +218,14 @@ class TweetTest(unittest.TestCase):
   def testParseUser_missingIdStr(self):
     """Test parsing an example user with no id_str field."""
     json_str = '{"user": {}}'
-    user = tweets.User.fromJson(json.loads(json_str))
+    user = tweets.User.FromJson(json.loads(json_str))
 
     self.assertEqual(None, user)
 
   def testParseTweet_missingIdStr(self):
     """Test parsing an example user with no id_str field."""
     json_str = '{}'
-    user = tweets.Tweet.fromJson(json.loads(json_str))
+    user = tweets.Tweet.FromJson(json.loads(json_str))
 
     self.assertEqual(None, user)
 

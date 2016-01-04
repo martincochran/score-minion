@@ -168,7 +168,7 @@ class GameModelTest(unittest.TestCase):
 
   def testTeamFromUser(self):
     """Test Team creation from a tweets.User class."""
-    user = tweets.User.fromJson(
+    user = tweets.User.FromJson(
         json.loads(
           '{"id_str": "1234", "id": 1234, "screen_name": "bob"}'))
     team = game_model.Team.FromTwitterUser(user)
@@ -197,12 +197,14 @@ class GameModelTest(unittest.TestCase):
     """Test GameSource creation from a tweets.Tweet class."""
     twt = web_test_base.WebTestBase.CreateTweet(
         1, ('bob', 2), created_at=datetime.datetime.utcnow())
-    source = game_model.GameSource.FromTweet(twt)
+    source = game_model.GameSource.FromTweet(twt, [1, 2])
 
     self.assertEquals(scores_messages.GameSourceType.TWITTER, source.type)
     self.assertEquals(None, source.score_reporter_url)
     self.assertEquals(twt.created_at, source.update_date_time)
     self.assertEquals(2, source.account_id)
+    self.assertEquals(1, source.home_score)
+    self.assertEquals(2, source.away_score)
 
   def testGameFromTweet(self):
     """Test creating a Game from a Tweet."""

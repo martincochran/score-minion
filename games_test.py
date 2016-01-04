@@ -43,6 +43,7 @@ class GamesTest(unittest.TestCase):
         [[1, 1], [0, 0], True, True],
         [[2, 0], [0, 1], False, True],
         [[0, 2], [1, 0], False, True],
+        [[10, 11], [13, 5], False, False],
     ]
 
     for a, b, ordered_result, unordered_result in table:
@@ -54,7 +55,8 @@ class GamesTest(unittest.TestCase):
         else:
           result = unordered_result
         self.assertEqual(l >= r, result,
-            msg='%s >= %s = %s, expected %s' % (a, b, not result, result))
+            msg='%s >= %s = %s, expected %s (ordered: %s)' % (
+              a, b, not result, result, ordered))
 
   def testConstructorErrors(self):
     with self.assertRaises(ValueError):

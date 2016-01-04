@@ -88,9 +88,9 @@ def IndexAccountData(screen_name, num_tweets, fetcher):
     logging.warning('Could not load timeline for user %s', screen_name)
     return
 
-  tweets.User.getOrInsertFromJson(json_obj[0].get('user', {}))
+  tweets.User.GetOrInsertFromJson(json_obj[0].get('user', {}))
   for json_twt in json_obj:
-    tweets.Tweet.getOrInsertFromJson(json_twt)
+    tweets.Tweet.GetOrInsertFromJson(json_twt)
 
 
 class DeleteAccountHandler(webapp2.RequestHandler):

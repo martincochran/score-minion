@@ -92,7 +92,7 @@ class WebTestBase(unittest.TestCase):
 
     logging.debug('Created json object: %s', d)
     # We re-use the Tweet parser because it sets all the default fields correctly.
-    return tweets.Tweet.fromJson(d, from_list=list_id)
+    return tweets.Tweet.FromJson(d, from_list=list_id)
 
   @classmethod
   def CreateUser(cls, id, screen_name, created_at=None, profile_url_https=''):
@@ -115,7 +115,7 @@ class WebTestBase(unittest.TestCase):
     if profile_url_https:
       d['profile_image_url_https'] = profile_url_https
 
-    return tweets.User.fromJson(d)
+    return tweets.User.FromJson(d)
 
   def SetJsonResponse(self, json_str, status_code=200):
     """Set the json response content for twitter_fetcher."""

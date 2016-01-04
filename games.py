@@ -66,14 +66,15 @@ class Scores(object):
     away = cmp(a[1], b[1])
     if home >= 0 and away >= 0:
       return home + away
-    if home < 0 and away < 0:
+    if home <= 0 and away <= 0:
       return home + away
+
     # If this case is reached, then one of the scores is less
     # than the prior score, which means it had to have occured
     # at an earlier game state (or, more likely, from a different
     # game in the case where scores are being compared from Tweets).
     return -1
-
+    
   def __str__(self):
     return '[%s, %s]' % (self._home, self._away)
 

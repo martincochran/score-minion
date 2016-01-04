@@ -371,7 +371,6 @@ class Tweet(ndb.Model):
   author_id_64 = ndb.IntegerProperty('a64')
 
   # Screen name of the author
-  # TODO: remove.  We'll look this up on demand using memcache.
   author_screen_name = ndb.StringProperty('an', required=True)
 
   # Date & time the tweet was authored
@@ -453,12 +452,12 @@ class Tweet(ndb.Model):
   added_by_app_version = ndb.StringProperty('ver', required=True)
 
   @classmethod
-  def getOrInsertFromJson(cls, json_obj, from_list=None):
+  def GetOrInsertFromJson(cls, json_obj, from_list=None):
     """Builds a Tweet object from a json object."""
     return cls.__BuildConstructorArgs(json_obj, True, from_list=from_list)
 
   @classmethod
-  def fromJson(cls, json_obj, from_list=None):
+  def FromJson(cls, json_obj, from_list=None):
     """Builds a Tweet object from a json object."""
     return Tweet.__BuildConstructorArgs(json_obj, False, from_list=from_list)
 
@@ -620,12 +619,12 @@ class User(ndb.Model):
   added_by_app_version = ndb.StringProperty('ver', required=True)
 
   @classmethod
-  def getOrInsertFromJson(cls, json_obj):
+  def GetOrInsertFromJson(cls, json_obj):
     """Builds a User object from a json object."""
     return cls.__BuildConstructorArgs(json_obj, True)
 
   @classmethod
-  def fromJson(cls, json_obj):
+  def FromJson(cls, json_obj):
     """Builds a User object from a json object."""
     return User.__BuildConstructorArgs(json_obj, False)
 

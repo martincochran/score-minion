@@ -583,7 +583,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     key = bob.key
     json_obj = json.loads(bob.ToJsonString())
     json_obj.get('user', {})['screen_name'] = 'Bob'
-    tweets.User.getOrInsertFromJson(json_obj)
+    tweets.User.GetOrInsertFromJson(json_obj)
 
     self.assertUserDbContents(['2'])
 
@@ -694,7 +694,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     twt = self.CreateTweet(1, ('bob', 2))
     teams = crawl_lists_handler._FindTeamsInTweet(twt, {})
     scores = [0, 0]
-    (score, game) = crawl_lists_handler._FindMostConsistentGame(twt, [], [],
+    (score, game) = crawl_lists_handler._FindMostConsistentGame(twt, [],
         teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU, scores)
 
     self.assertEquals(0.0, score)
@@ -712,6 +712,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     teams = crawl_lists_handler._FindTeamsInTweet(twt, {'2': user})
 
     source = GameSource(type=GameSourceType.TWITTER,
+        home_score=5, away_score=7,
         update_date_time=now - timedelta(minutes=5))
     # Create a game with 'bob' in that division, age_bracket, and league
     game = Game(id_str='new game', teams=teams, scores=[5, 7],
@@ -721,11 +722,38 @@ class CrawlListsTest(web_test_base.WebTestBase):
     # Score has to be a plausible update to the game.
     scores = [6, 7]
 
-    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game], [],
+    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game],
         teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU, scores)
 
-    self.assertEquals(1.0, score)
+    # Score should be high since the time of the Tweet is close to the game.
+    self.assertTrue(score >= 0.9)
     self.assertEquals(game, found_game)
+
+  def testFindMostConsistentGame_noSourceScores(self):
+    """Verify GameSources with no scores are handled."""
+    user = self.CreateUser(2, 'bob')
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    now = datetime.utcnow()
+    twt = self.CreateTweet(1, ('bob', 2), created_at=now)
+
+    # The first team will be 'bob'
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, {'2': user})
+
+    source = GameSource(type=GameSourceType.TWITTER,
+        update_date_time=now - timedelta(minutes=5))
+    # Create a game with 'bob' in that division, age_bracket, and league
+    game = Game(id_str='new game', teams=teams, scores=[5, 7],
+        division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
+        league=League.USAU, created_at=now, last_modified_at=now,
+        sources=[source])
+
+    scores = [6, 7]
+    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game],
+        teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU, scores)
+
+    self.assertEqual(0.0, score)
+    self.assertEqual(None, found_game)
 
   def testFindMostConsistentGame_noMatchingGamesWithTeam(self):
     """Verify no consistent game is found if no games with that team exist."""
@@ -756,7 +784,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     # When we try to find a game that's consistent with the 'alice' teams
     # it fails because the only known game has 'bob' and an unknown team.
     scores = [0, 0]
-    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game], [],
+    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game],
         twt_teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU,
         scores)
 
@@ -785,7 +813,47 @@ class CrawlListsTest(web_test_base.WebTestBase):
         last_modified_at=creation_date)
 
     scores = [0, 0]
-    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game], [],
+    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game],
+        teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU, scores)
+
+    self.assertEquals(0.0, score)
+    self.assertEquals(None, found_game)
+
+  def testFindMostConsistentGame_matchingTeamButNotMatchingScore(self):
+    """Verify no consistent game is found if update is too old."""
+    user = self.CreateUser(2, 'bob')
+    user.put()
+
+    user = self.CreateUser(3, 'alice')
+    user.put()
+
+    user = self.CreateUser(4, 'eve')
+    user.put()
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    now = datetime.utcnow()
+    twt = self.CreateTweet(1, ('bob', 2), created_at=now)
+
+    # The first team will be 'bob'
+    teams = [Team(twitter_id=2), Team(twitter_id=3)]
+    # Create a game that was created by a prior tweet by bob that involved
+    # alice's team.
+    creation_date = now + timedelta(minutes=30)
+    sources = [GameSource(
+      home_score=10, away_score=11,
+      type=GameSourceType.TWITTER, update_date_time=creation_date)]
+    game = Game(id_str='alice / bob game', teams=teams, scores=[10, 11],
+        division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
+        sources=sources, league=League.USAU, created_at=creation_date,
+        last_modified_at=creation_date)
+
+    # Now simulate a tweet from alice about a previous game that was
+    # crawled in the same timeframe.
+    twt = self.CreateTweet(5, ('alice', 3), created_at=now)
+    teams = [Team(twitter_id=3), Team(twitter_id=4)]
+    creation_date = now
+    scores = [13, 5]
+    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game],
         teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU, scores)
 
     self.assertEquals(0.0, score)
@@ -803,6 +871,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     teams = crawl_lists_handler._FindTeamsInTweet(twt, {'2': user})
 
     source = GameSource(type=GameSourceType.TWITTER,
+      home_score=15, away_score=12,
         update_date_time=now - timedelta(minutes=5))
     # Create a game with 'bob' in that division, age_bracket, and league
     game = Game(id_str='new game', teams=teams, scores=[15, 12],
@@ -812,11 +881,75 @@ class CrawlListsTest(web_test_base.WebTestBase):
     # Score is from a new game, apparently.
     scores = [1, 0]
 
-    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game], [],
+    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game],
         teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU, scores)
 
     self.assertEquals(0.0, score)
     self.assertEquals(None, found_game)
+
+  def testGroupGames(self):
+    """Test grouping of games using some real data from Mischief."""
+    twts = [
+        # Finals vs @PBRawr
+        # Almost 80 minutes later, a correction in score.
+        ["Er, correction. 13-10 vs @PBRawr.", "22:15:06"],
+        # Typo
+        ["13-0 for game. Good game @PBRawr!", "20:58:59"],
+        ["Matt west. 12-10 game to 13.", "20:56:02"],
+        ["40 yards to Sharon for the downwind break. 11-9", "20:47:42"],
+        ["Tiring hold. 10-9.", "20:40:08"],
+        ["Both o lines hold. Berry to ham makes it 9-7.", "20:24:11"],
+        ["Doffense takes half drew to jon, 8-6 over @PBRawr.", "20:09:18"],
+        ["Ham to berry, 7-6.", "20:04:22"],
+        ["Ellen scores to give the o a break. 6-5 on @PBRawr", "20:00:04"],
+        ["Ellen for score. Thanks @SuperflyUlti. 5-4 on @PBRawr", "19:54:10"],
+        [".@PBRawr got their break back. 4-4", "19:51:49"],
+        ["Things happened. 3-1, up a break on @PBRawr", "19:40:43"],
+        # Semis vs alchemy
+        ["hucks to Jaffe for game. 15-4, well played everyone", "19:17:18"],
+        ["don't worry- mischief hasn't. 14-4 now", "19:09:04"],
+        ["Sea turtle catches the s cut. 10-4", "18:57:01"],
+        ["still complains about being old. 6-3", "18:31:05"],
+        ["Free lesson on boxing out for the kids. 5-3", "18:28:46"],
+        ["Sharon makes it easy. 3-2.", "18:21:37"],
+        ["3-1. Jenny Wang. That it all.", "18:16:50"],
+        ["Game versus alchemy. we hold. 1-0.", "18:11:06"],
+        # Quarters vs Platipi
+        ["Chuck has it figured out. Berry reels it in. 13-9 game.", "17:57:59"],
+        ["enough to overcome our struggle-sesh. 12-9.", "17:53:35"],
+        ["the score. 10-6. Actually 11-6 now.", "17:37:52"],
+        ["herthe double happiness. 8-4, half.", "17:08:02"],
+        ["7-4. Not the prettiest but not the worst.", "17:04:42"],
+        ["5-3 now. They broke us then Sean Ham broke", "16:57:08"],
+        ["Jaffe lefty to craw. 4-1 old guys.", "16:50:14"],
+        ["Combined age: 63. Score: 3-1.", "16:48:54"],
+        ["Mischief v platipi. Three quick points. 2-1 red team", "16:47:00"],
+    ]
+
+    handler = crawl_lists.CrawlListHandler()
+
+    # Create tweets from above data, then see how they are grouped.
+    date_fmt = 'Sun Jun 07 %s 2015'
+    id = 100
+    twt_objs = []
+    games = []
+    user_map = {
+        '2': self.CreateUser(2, 'mischief'),
+    }
+    d = Division.MIXED
+    a = AgeBracket.NO_RESTRICTION
+    l = League.USAU
+    for twt in twts:
+      t = datetime.strptime(date_fmt % twt[1], tweets.DATE_PARSE_FMT_STR)
+      twt = self.CreateTweet(id, ('mischief', 2), text=twt[0], created_at=t)
+      id -= 1
+      handler._PossiblyAddTweetToGame(twt, [], games, user_map, d, a, l)
+
+    logging.info(games)
+    self.assertEqual(3, len(games))
+    self.assertEqual(12, len(games[0].sources))
+    self.assertEqual(8, len(games[1].sources))
+    self.assertEqual(9, len(games[2].sources))
 
   def testFindScoreIndicies(self):
     """Sanity test for basic cases in FindScoreIndices."""
@@ -913,7 +1046,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     # Create a game with 'bob' in that division, age_bracket, and league
     source = GameSource(type=GameSourceType.TWITTER,
-        update_date_time=now)
+        home_score=3, away_score=5, update_date_time=now)
     game = Game(id_str='new game', teams=teams, scores=[3, 5],
         division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
         league=League.USAU, created_at=now, last_modified_at=now,
@@ -963,7 +1096,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     # Create a game with 'bob' in that division, age_bracket, and league
     source = GameSource(type=GameSourceType.TWITTER,
-        update_date_time=now)
+        home_score=3, away_score=5, update_date_time=now)
     game = Game(id_str='new game', teams=teams, scores=[3, 5],
         division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
         league=League.USAU, created_at=now, last_modified_at=now,
@@ -1020,7 +1153,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     # Create a game with 'bob' in that division, age_bracket, and league
     source = GameSource(type=GameSourceType.TWITTER,
-        update_date_time=now)
+        home_score=3, away_score=5, update_date_time=now)
     game = Game(id_str='new game', teams=teams, scores=[3, 5],
         division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
         league=League.USAU, created_at=now, last_modified_at=now,
@@ -1174,7 +1307,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
     game = Game()
     self.CreateUser(2, 'bob').put()
     twt = self.CreateTweet(5, ('bob', 2), 'up 5-7')
-    game.sources = [GameSource.FromTweet(twt)]
+    game.sources = [GameSource.FromTweet(twt, [5, 7])]
 
     game.teams = [Team(score_reporter_id=crawl_lists.UNKNOWN_SR_ID)]
     crawl_lists_handler = crawl_lists.CrawlListHandler()

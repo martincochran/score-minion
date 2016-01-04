@@ -67,7 +67,7 @@ FIRST_TWEET_IN_STREAM_ID = 2L
 
 # Threshold for consistency score where we add a tweet to a game instead of
 # creating a new one.
-GAME_CONSISTENCY_THRESHOLD = 0.5
+GAME_CONSISTENCY_THRESHOLD = 0.4
 
 # Maximum users per user crawl request.
 MAX_USERS_PER_CRAWL_REQUEST = 100
@@ -394,6 +394,34 @@ class CrawlAllUsersHandler(webapp2.RequestHandler):
     self.response.write(msg)
 
 
+def UpdateUser(json_user, user_map):
+  """Add or update the json user to the datastore.
+
+  Args:
+    json_user: Twitter user json obj.
+    user_map: Map from integer user id to user object.
+  """
+  model_user = tweets.User.GetOrInsertFromJson(json_user)
+  json_user_url = json_user.get('profile_image_url_https', '')
+  # Update the user profile URL if it has changed.
+  changed = False
+  if model_user and model_user.profile_image_url_https != json_user_url:
+    model_user.profile_image_url_https = json_user_url
+    changed = True
+
+  # If the user screen name is not already lower case, update it.
+  screen_name = json_user.get('screen_name', '').lower()
+  if model_user and model_user.screen_name != screen_name:
+    logging.info('screen name updating from %s to %s',
+        model_user.screen_name, screen_name)
+    model_user.screen_name = screen_name
+    changed = True
+  if changed:
+    model_user.put()
+  if model_user and not user_map.get(model_user.id_str, None):
+    user_map[model_user.id_str] = model_user
+
+
 class CrawlUserHandler(webapp2.RequestHandler):
   """Handler to update twitter user information for multiple users."""
   def post(self):
@@ -418,37 +446,7 @@ class CrawlUserHandler(webapp2.RequestHandler):
       self.response.write(msg)
 
     for json_user in json_obj:
-      # TODO: refactor into separate method
-      model_user = tweets.User.getOrInsertFromJson(json_user)
-      json_user_url = json_user.get('profile_image_url_https', '')
-      # Update the user profile URL if it has changed.
-      changed = False
-      if model_user and model_user.profile_image_url_https != json_user_url:
-        model_user.profile_image_url_https = json_user_url
-        changed = True
-
-      # If the user screen name is not already lower case, update it.
-      logging.info('checking screen name')
-      screen_name = json_user.get('screen_name', '').lower()
-      if model_user and model_user.screen_name != screen_name:
-        logging.info('screen name updating from %s to %s',
-            model_user.screen_name, screen_name)
-        model_user.screen_name = screen_name
-        changed = True
-      if changed:
-        model_user.put()
-
-      # Clean-up: only need to do once on production data.
-      # TODO: delete after the one-time clean-up
-      # Lookup all users with that ID.
-      user_query = tweets.User.query(
-          tweets.User.id_str == json_user.get('id_str', ''))
-      all_users = user_query.fetch()
-      for user in all_users:
-        if user.key != model_user.key:
-          logging.info('Deleting extra user: %s', user.screen_name)
-          user.key.delete()
- 
+      UpdateUser(json_user, {})
 
 class CrawlListHandler(webapp2.RequestHandler):
   """Crawls the new statuses from a pre-defined list."""
@@ -546,7 +544,7 @@ class CrawlListHandler(webapp2.RequestHandler):
     for json_twt in json_obj:
       # TODO: consider writing all of these at the same time / in one transaction, possibly
       # in the same transaction that updates all the games as well.
-      twt = tweets.Tweet.getOrInsertFromJson(json_twt,
+      twt = tweets.Tweet.GetOrInsertFromJson(json_twt,
           from_list=crawl_state.list_id)
       if not latest_incoming_tweet:
         latest_incoming_tweet = twt
@@ -555,24 +553,7 @@ class CrawlListHandler(webapp2.RequestHandler):
         logging.warning('Could not parse tweet from %s', json_twt)
         continue
 
-      model_user = tweets.User.getOrInsertFromJson(json_twt.get('user', {}))
-      json_user_url = json_twt.get('user', {}).get(
-          'profile_image_url_https', '')
-      json_screen_name = json_twt.get('user', {}).get(
-          'screen_name', '').lower()
-      changed = False
-      # Update the user profile URL if it has changed.
-      if model_user and model_user.profile_image_url_https != json_user_url:
-        model_user.profile_image_url_https = json_user_url
-        changed = True
-      if model_user and model_user.screen_name != json_screen_name:
-        model_user.screen_name = json_screen_name
-        changed = True
-      if changed:
-        model_user.put()
-      if model_user and not users.get(model_user.id_str, None):
-        users[model_user.id_str] = model_user
-
+      UpdateUser(json_twt.get('user', {}), users)
       oldest_incoming_tweet = twt
       twts.append(twt)
 
@@ -782,10 +763,22 @@ class CrawlListHandler(webapp2.RequestHandler):
       return
 
     teams = self._FindTeamsInTweet(twt, user_map)
+    logging.info('teams: %s', teams)
     scores = [twt.entities.integers[score_indicies[0]].num,
           twt.entities.integers[score_indicies[1]].num]
+    logging.info('scores: %s', scores)
     (consistency_score, game) = self._FindMostConsistentGame(
-        twt, existing_games, added_games, teams, division, age_bracket, league, scores)
+        twt, existing_games + added_games, teams, division, age_bracket, league, scores)
+    logging.info('consistency score %s for twt %s', consistency_score, twt.text)
+    # TODO: detect tweets that are summaries for the day (eg, "We went
+    # 3-0 today")
+    # Some examples:
+    # - "X and Y both finish 3-1 on the day. Final pool play game at 9am. @FCStourney"
+    # - "Y is 3-0 playing Turbine at 3. X is 2-0 winning their third game. @FCStourney"
+    # - "3-0 today with wins over Ozone, Grit, and Rut-ro. Quarters against Rogue tomorrow morning!"
+    
+    # Tricky cases:
+    # - "A really great finals game with @PhxUltimate leaves us coming up a little short, 10-11. Great weekend everyone! #southeastreppin"
 
     # Try to find a game that matches this tweet in existing games. If no such
     # game exists, create one.
@@ -798,12 +791,12 @@ class CrawlListHandler(webapp2.RequestHandler):
           logging.debug('Tried to add tweet more than once as game source %s',
               twt)
           return
-      game.sources.append(GameSource.FromTweet(twt))
+      game.sources.append(GameSource.FromTweet(twt, scores))
       game.sources.sort(cmp=lambda x,y: cmp(y.update_date_time,
         x.update_date_time))
       self._MergeTeamsIntoGame(game, teams)
 
-  def _FindMostConsistentGame(self, twt, existing_games, added_games, teams,
+  def _FindMostConsistentGame(self, twt, existing_games, teams,
       division, age_bracket, league, scores):
     """Returns the game most consistent with the given games.
 
@@ -815,9 +808,7 @@ class CrawlListHandler(webapp2.RequestHandler):
     Args:
       twt: tweets.Tweet object to be processed.
       existing_games: list of game_model.Game objects that are currently in the
-        db.
-      added_games: list of game_model.Game objects that have been added as part 
-        of this crawl request.
+        db or have been added as part of this crawl request.
       teams: list of game_model.Team objects involved in this game.
       division: Division to set new Game to, if creating one
       age_bracket: AgeBracket to set new Game to, if creating one
@@ -829,7 +820,13 @@ class CrawlListHandler(webapp2.RequestHandler):
       A (score, game) pair of the game that matches mostly closely with the
       tweet as well as a confidence score in the match.
     """
-    for game in existing_games + added_games:
+    # TODO: try to do simple lookup of other team based on searching datastore
+    # using Tweet text ('Spiders' and 'Cascades' or 'SJ, San Jose', 'Seattle',
+    # eg). This, unfortunately, will probably have to be hand-curated for each
+    # team and probably isn't worth the effort.
+    # TODO: use ML to build a better model once there is enough data.
+    most_consistent = [0.0, None]
+    for game in existing_games:
       for game_team in game.teams:
         for tweet_team in teams:
           if game_team.twitter_id != tweet_team.twitter_id:
@@ -843,28 +840,89 @@ class CrawlListHandler(webapp2.RequestHandler):
           # So one of the teams is the same. If this game happened within the last few
           # hours it's probably the same game.
           max_game_length = timedelta(hours=MAX_LENGTH_OF_GAME_IN_HOURS)
-          if abs(twt.created_at - game.last_modified_at) >= max_game_length:
-            return (0.0, None)
+          if twt.created_at > game.last_modified_at:
+            if twt.created_at - game.last_modified_at >= max_game_length:
+              logging.debug('game too old, skipping')
+              continue
+
+          if twt.created_at < game.last_modified_at:
+            if game.last_modified_at - twt.created_at >= max_game_length:
+              logging.debug('game too new, skipping')
+              continue
 
           new_scores = games.Scores.FromList(scores, ordered=False)
-          last_source = game.sources[-1]
-          type = last_source.type
-          old_scores = games.Scores.FromList(game.scores,
-              ordered=(type == scores_messages.GameSourceType.SCORE_REPORTER))
+          score = self._CompareScoresFromAllSources(
+              twt, new_scores, game.sources)
+          if score > most_consistent[0]:
+            most_consistent = [score, game]
 
-          # Handles case where this is the first tweet we've seen of this game
-          # since a new crawl.
-          if new_scores >= old_scores:
-            if twt.created_at >= last_source.update_date_time:
-              return (1.0, game)
+    return most_consistent
 
-          # Handles case where this is a tweet we've seen of this game
-          # during this crawl but not the first in this crawl.
-          if new_scores <= old_scores:
-            if twt.created_at <= last_source.update_date_time:
-              return (1.0, game)
-        
-    return (0.0, None)
+  def _CompareScoresFromAllSources(self, twt, new_scores, sources):
+    """Compare consistency of this score with all other scores in the game.
+
+    Args:
+      twt: tweets.Tweet object
+      new_scores: games.Scores object from this tweet.
+      sources: List of game sources from this game.
+
+
+    Returns:
+      A confidence score of the match of this tweet with the game.
+    """
+    # This should never happen in practice.
+    if not sources:
+      logging.error('Cannot compare consistency with no sources')
+      return 0.0
+
+    numerator = 0.0
+    denominator = 0.0
+    oldest_source_time = datetime.utcnow()
+    for source in sources:
+      denominator += 1.0
+      type = source.type
+
+      # Scores were added to games only in early 2016 - ignore
+      # older games.
+      if (source.home_score is None) or (source.away_score is None):
+        continue
+
+      old_scores = games.Scores.FromList(
+          [source.home_score, source.away_score],
+          ordered=(type == scores_messages.GameSourceType.SCORE_REPORTER))
+      
+      if source.update_date_time < oldest_source_time:
+        oldest_source_time = source.update_date_time
+
+      # The comparison function will return -1 if the games are 
+      # clearly from different games.
+      if (new_scores >= old_scores) != (old_scores <= new_scores):
+        continue
+
+      # Handles case where this is the first tweet we've seen of this game
+      # since a new crawl.
+      if new_scores >= old_scores:
+        if twt.created_at >= source.update_date_time:
+          numerator += 1
+          continue
+
+      # Handles case where this is a tweet we've seen of this game
+      # during this crawl but not the first in this crawl.
+      if new_scores <= old_scores:
+        if twt.created_at <= source.update_date_time:
+          numerator += 1
+          continue
+
+    # TODO: use a better distance metric. If a new tweet comes in
+    # that's more recent than the others then this is probably wrong.
+    if oldest_source_time < twt.created_at:
+      seconds = float((twt.created_at - oldest_source_time).seconds)
+    else:
+      seconds = float((oldest_source_time - twt.created_at).seconds)
+    logging.debug('%s/%s, seconds: %s', numerator, denominator, seconds)
+
+    max_seconds = float(timedelta(hours=MAX_LENGTH_OF_GAME_IN_HOURS).seconds)
+    return (numerator / denominator) * ((max_seconds - seconds) / max_seconds)
 
   def _FindTeamsInTweet(self, twt, user_map):
     """Find the teams this tweet refers to.
@@ -884,8 +942,8 @@ class CrawlListHandler(webapp2.RequestHandler):
     """
     this_team = self._TeamFromAuthorId(twt.author_id, user_map)
 
-    # TODO: add logic to handle the case where the author of the tweet is not
-    # involved in the game.
+    # TODO(ultiworld): add logic to handle the case where the author of the
+    # tweet is not involved in the game.
 
     # Try to determine the other team based on user account mention.
     other_team = Team(score_reporter_id=UNKNOWN_SR_ID)
@@ -915,7 +973,6 @@ class CrawlListHandler(webapp2.RequestHandler):
     if user_map.get(author_id):
       return Team.FromTwitterUser(user_map.get(author_id))
 
-    # TODO: lookup user name using memcache
     account_query = tweets.User.query().order(tweets.User.screen_name)
     account_query = account_query.filter(tweets.User.id_str == author_id)
     user = account_query.fetch(1)
@@ -1023,11 +1080,6 @@ class CrawlListHandler(webapp2.RequestHandler):
     # tweets since we call get_or_insert.
     cache_latest = memcache.get(
         key=LISTS_LATEST_KEY_PREFIX + list_id, namespace=LISTS_LATEST_NAMESPACE)
-
-    # TODO: remove once transitioned to using integer IDs instead of string and
-    # this has been deployed.
-    if type(cache_latest) == long:
-      return cache_latest
 
     # Let's look at the datastore
     tweet_query = tweets.Tweet.query(tweets.Tweet.from_list == list_id).order(

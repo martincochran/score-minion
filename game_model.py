@@ -192,6 +192,10 @@ class GameSource(ndb.Model):
   # Text from the tweet.
   tweet_text = ndb.StringProperty('tt')
 
+  # The score this source represents.
+  home_score = ndb.IntegerProperty('hs')
+  away_score = ndb.IntegerProperty('as')
+
   @classmethod
   def FromProto(cls, proto_obj):
     """Create GameSource ndb object from the API Proto.
@@ -215,10 +219,12 @@ class GameSource(ndb.Model):
     return source
 
   @classmethod
-  def FromTweet(cls, twt):
+  def FromTweet(cls, twt, scores):
     return GameSource(type=scores_messages.GameSourceType.TWITTER,
                       update_date_time=twt.created_at,
                       tweet_text=twt.text,
+                      home_score=scores[0],
+                      away_score=scores[1],
                       tweet_id=twt.id_64,
                       account_id=twt.author_id_64)
   def ToProto(self):
@@ -349,7 +355,7 @@ class Game(ndb.Model):
         age_bracket=age_bracket,
         created_at=twt.created_at,
         last_modified_at=twt.created_at,
-        sources=[GameSource.FromTweet(twt)],
+        sources=[GameSource.FromTweet(twt, scores)],
         key=game_key_full(game_id))
 
   @classmethod

@@ -481,7 +481,7 @@ class CrawlListHandler(webapp2.RequestHandler):
         twts_future = tweet_query.fetch_async()
 
     # Only pull up games for the last two weeks.
-    # TODO: run a separate query for games populated from score reporter, which
+    # TODO(NEXT): run a separate query for games populated from score reporter, which
     # may have been created weeks before the actual game.
     games_query = Game.query(Game.division == division,
         Game.age_bracket == age_bracket,
@@ -518,7 +518,7 @@ class CrawlListHandler(webapp2.RequestHandler):
 
     existing_games = games_future.get_result()
     self.UpdateGames(twts, existing_games, users, division, age_bracket, league)
-    # TODO(NEXT): Consider merging the games if they are appropriately consistent.
+    # TODO(SOON): Consider merging the games if they are appropriately consistent.
 
   def UpdateTweetDbWithNewTweets(self, json_obj, crawl_state):
     """Update the Tweet DB with the newly-fetched tweets.
@@ -728,9 +728,9 @@ class CrawlListHandler(webapp2.RequestHandler):
 
     # Teams are inconsistent in the game - update them.
     logging.info('Updating inconsistent game: %s', game.id_str)
-    team_a = self._TeamFromAuthorId(str(sorted_teams[0][1]), user_map)
+    team_a, _, _, _ = self._TeamFromAuthorId(str(sorted_teams[0][1]), user_map)
     if len(sorted_teams) > 1:
-      team_b = self._TeamFromAuthorId(str(sorted_teams[1][1]), user_map)
+      team_b, _, _, _ = self._TeamFromAuthorId(str(sorted_teams[1][1]), user_map)
     else:
       team_b = Team(score_reporter_id=UNKNOWN_SR_ID)
 
@@ -913,7 +913,7 @@ class CrawlListHandler(webapp2.RequestHandler):
           numerator += 1
           continue
 
-    # TODO: use a better distance metric. If a new tweet comes in
+    # TODO(SOON): use a better distance metric. If a new tweet comes in
     # that's more recent than the others then this is probably wrong.
     if oldest_source_time < twt.created_at:
       seconds = float((twt.created_at - oldest_source_time).seconds)
@@ -940,22 +940,28 @@ class CrawlListHandler(webapp2.RequestHandler):
       determined then the team.score_reporter_id will be set to UNKNOWN_SR_ID
       and no other object properties will be set.
     """
-    this_team = self._TeamFromAuthorId(twt.author_id, user_map)
+    this_team, div, ab, l = self._TeamFromAuthorId(twt.author_id, user_map)
 
     # TODO(ultiworld): add logic to handle the case where the author of the
     # tweet is not involved in the game.
 
     # Try to determine the other team based on user account mention.
     other_team = Team(score_reporter_id=UNKNOWN_SR_ID)
-    if twt.entities and twt.entities.user_mentions:
-      # If there is only one user mention and it's in the db, then likelihood is
-      # high that it's the other team.
-      if len(twt.entities.user_mentions) == 1:
-        other_team = self._TeamFromAuthorId(
-            twt.entities.user_mentions[0].user_id, user_map)
+    if not twt.entities:
+      return [this_team, other_team]
+    if not twt.entities.user_mentions:
+      return [this_team, other_team]
 
-    # TODO(NEXT): double-check that this is a team from the same division and
-    # age bracket, and league.
+    # Otherwise we take the first team in that division / age bracket / league.
+    for user_mention in twt.entities.user_mentions:
+      candidate_team, other_div, other_ab, other_l = self._TeamFromAuthorId(
+          twt.entities.user_mentions[0].user_id, user_map)
+      if candidate_team.twitter_id:
+        if (div != other_div) or (l != other_l):
+          continue
+        if ab == other_ab:
+          return [this_team, candidate_team]
+
     return [this_team, other_team]
 
   def _TeamFromAuthorId(self, author_id, user_map):
@@ -966,19 +972,29 @@ class CrawlListHandler(webapp2.RequestHandler):
       user_map: map from string user ids to users who have authored a tweet
         during this crawl cycle.
     Returns:
-      A game_model.Team object.  If the user ID is not found in the provided
+      A tuple with game_model.Team object, division, league, and age bracket.
+      If the user ID is not found in the provided
       user_map or the db then a user with score_reporter_id equal to
-      UNKNOWN_SR_ID is returned.
+      UNKNOWN_SR_ID is returned for this first element and the other values
+      should be ignored.
     """
     if user_map.get(author_id):
-      return Team.FromTwitterUser(user_map.get(author_id))
+      user = user_map.get(author_id)
+      team = Team.FromTwitterUser(user_map.get(author_id))
+      div, ab, league = list_id_bimap.ListIdBiMap.GetStructuredPropertiesForList(
+          user.from_list)
+      return team, div, league, ab
 
     account_query = tweets.User.query().order(tweets.User.screen_name)
     account_query = account_query.filter(tweets.User.id_str == author_id)
     user = account_query.fetch(1)
     if user:
-      return Team.FromTwitterUser(user[0])
-    return Team(score_reporter_id=UNKNOWN_SR_ID)
+      team = Team.FromTwitterUser(user[0])
+      div, ab, league = list_id_bimap.ListIdBiMap.GetStructuredPropertiesForList(
+          user[0].from_list)
+      return team, div, league, ab
+    team = Team(score_reporter_id=UNKNOWN_SR_ID)
+    return team, Division.OPEN, League.USAU, AgeBracket.NO_RESTRICTION
 
   def _MergeTeamsIntoGame(self, game, teams):
     """Merge the teams from the tweet into the game.

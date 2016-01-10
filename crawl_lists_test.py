@@ -675,9 +675,7 @@ class CrawlListsTest(web_test_base.WebTestBase):
 
     # Make sure we found 'bob' correctly.
     self.assertEquals(2, teams[0].twitter_id)
-
-    # TODO(NEXT): uncomment this after DB is updated with this information
-    # self.assertEquals(crawl_lists.UNKNOWN_SR_ID, teams[1].score_reporter_id)
+    self.assertEquals(crawl_lists.UNKNOWN_SR_ID, teams[1].score_reporter_id)
 
   def testFindTeamsInTweet_noExistingUser(self):
     """Handle the case gracefully if the user doesn't exist in db."""

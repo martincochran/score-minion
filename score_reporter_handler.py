@@ -178,10 +178,14 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       age_bracket: scores_messages.AgeBracket age bracket of team
     """
     team_tourney_ids = set()
-    team_tourney_ids.add((self._ParseTourneyId(game_info.home_team_link),
-      game_info.home_team_link))
-    team_tourney_ids.add((self._ParseTourneyId(game_info.away_team_link),
-      game_info.away_team_link))
+    home_tourney_id = self._ParseTourneyId(game_info.home_team_link)
+    away_tourney_id = self._ParseTourneyId(game_info.away_team_link)
+    if not home_tourney_id or not away_tourney_id:
+      logging.debug('Ignore game %s since no teams are involved.', game_info)
+      return
+
+    team_tourney_ids.add((home_tourney_id, game_info.home_team_link))
+    team_tourney_ids.add((away_tourney_id, game_info.away_team_link))
 
     team_tourney_map = {}
     found_all = True
@@ -256,9 +260,19 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       team.twitter_id = teams[0].twitter_id
   
   def _ParseTourneyId(self, link):
-    # TODO(NEXT): if the teams are not set yet, link will be empty and this
-    # will throw an exception. Handle - bail out of returning a game.
-    return link.split('=')[1]
+    """Parses tournament ID from the team link.
+
+    Args:
+      link: Link parsed from tournament page.
+
+    Returns:
+      Tournament-specific team ID if the link is of the correct form and
+      an empty string otherwise.
+    """
+    link_parts = link.split('=')
+    if len(link_parts) < 2:
+      return ''
+    return link_parts[1]
 
 
 class TeamHandler(webapp2.RequestHandler):

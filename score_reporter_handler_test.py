@@ -86,6 +86,24 @@ FAKE_TOURNEY_SCORES_PAGE = """
 </body>
 """
 
+FAKE_TOURNEY_NO_TEAM_URLS = """
+<!doctype html> 
+<body>
+<tr data-game="71984">
+  <span data-type="game-date">Fri 5/22</span>
+  <span data-type="game-time">10:30 AM</span>
+  <span data-type"game-field">Field 5</span>
+  <span data-type="game-team-home">
+  </span>
+  <span data-type="game-team-away">
+  </span>
+  <span data-type="game-score-home">15</span>
+  <span data-type="game-score-away">13</span>
+  <span data-type="game-status">Final</span>
+</tr>
+</body>
+"""
+
 
 # These pages may have a valid division but they won't have an
 # age bracket URL link.
@@ -322,6 +340,34 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     self.assertEqual('123', games[0].teams[1].score_reporter_id)
     self.assertEqual(None, games[0].teams[0].twitter_id)
     self.assertEqual(5, games[0].teams[1].twitter_id)
+
+  @mock.patch.object(taskqueue, 'add')
+  def testParseTourneyScores_noTeamUrls(self, mock_add_queue):
+    # Page with two teams, both of which have been added to the DB.
+    self.SetHtmlResponse(FAKE_TOURNEY_NO_TEAM_URLS)
+    params = {
+        'url_suffix': 'schedule/Men/College-Men/',
+        'name': 'my_tourney',
+        'division': 'OPEN',
+        'age_bracket': 'COLLEGE'
+    }
+    # One team has already been added to the database, but one is new.
+    game_model.TeamIdLookup(
+        score_reporter_id='123',
+        score_reporter_tourney_id=['8%3d']).put()
+    game_model.Team(twitter_id=5,
+        score_reporter_id='123').put()
+    game_model.TeamIdLookup(
+        score_reporter_id='456',
+        score_reporter_tourney_id=['g%3d']).put()
+    response = self.testapp.get('/tasks/sr/crawl_tournament', params=params)
+    self.assertEqual(200, response.status_int)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(0, len(calls))
+    game_query = game_model.Game.query()
+    games = game_query.fetch(1000)
+    self.assertEqual(0, len(games))
 
   @mock.patch.object(taskqueue, 'add')
   def testParseTourneyScores_updateDate(self, mock_add_queue):

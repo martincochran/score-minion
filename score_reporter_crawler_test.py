@@ -112,6 +112,8 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
 
     # No placement brackets for this tournament.
     self.assertEqual(31, len(actual_games))
+    for game in actual_games:
+      logging.info('date: %s, time: %s', game.date, game.time)
 
     # Verify full parsing of one pool play game.
     full_url = '%s/%s' % (score_reporter_crawler.EVENT_PREFIX, url)
@@ -158,7 +160,8 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
         scores_messages.AgeBracket.COLLEGE)
 
     self.assertEqual(55, len(actual_games))
-    logging.info(actual_games)
+    for game in actual_games:
+      logging.info('date: %s, time: %s', game.date, game.time)
 
     # Verify full parsing of one pool play game.
     game = score_reporter_crawler.GameInfo('71984', full_url, name,

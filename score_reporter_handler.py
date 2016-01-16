@@ -256,6 +256,8 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       team.twitter_id = teams[0].twitter_id
   
   def _ParseTourneyId(self, link):
+    # TODO(NEXT): if the teams are not set yet, link will be empty and this
+    # will throw an exception. Handle - bail out of returning a game.
     return link.split('=')[1]
 
 

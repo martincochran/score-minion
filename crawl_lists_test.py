@@ -727,6 +727,38 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertTrue(score >= 0.9)
     self.assertEquals(game, found_game)
 
+  def testFindMostConsistentGame_scoreReporter(self):
+    """Verify that it finds consistent games if it exists."""
+    user = self.CreateUser(2, 'bob')
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    now = datetime.utcnow()
+    twt = self.CreateTweet(1, ('bob', 2), created_at=now)
+
+    # The first team will be 'bob'
+    teams = crawl_lists_handler._FindTeamsInTweet(twt, {'2': user})
+
+    # Simulate that this is a game crawled by score reporter weeks ago.
+    score_crawl_time = now - timedelta(weeks=5)
+    source = GameSource(type=GameSourceType.SCORE_REPORTER,
+        home_score=0, away_score=0,
+        update_date_time=score_crawl_time)
+    # Create a game with 'bob' in that division, age_bracket, and league
+    game = Game(id_str='new game', teams=teams, scores=[0, 0],
+        division=Division.OPEN, age_bracket=AgeBracket.NO_RESTRICTION,
+        start_time=now - timedelta(hours=1),
+        league=League.USAU, created_at=score_crawl_time,
+        last_modified_at=score_crawl_time, sources=[source])
+    # Score has to be a plausible update to the game.
+    scores = [2, 3]
+
+    (score, found_game) = crawl_lists_handler._FindMostConsistentGame(twt, [game],
+        teams, Division.OPEN, AgeBracket.NO_RESTRICTION, League.USAU, scores)
+
+    # Score should be high since the time of the Tweet is close to the game.
+    self.assertTrue(score >= crawl_lists.GAME_CONSISTENCY_THRESHOLD)
+    self.assertEquals(game, found_game)
+
   def testFindMostConsistentGame_noSourceScores(self):
     """Verify GameSources with no scores are handled."""
     user = self.CreateUser(2, 'bob')

@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
+from datetime import datetime, timedelta
 import os
 import uuid
 
@@ -28,6 +28,13 @@ DEFAULT_GAME_DB_NAME = 'game_db'
 DEFAULT_TEAM_TABLE_NAME = 'team_db'
 FULL_INFO_TABLE_NAME = 'full_team_info_db'
 SR_TEAM_TABLE_NAME = 'team_db'
+
+
+# Example date: '8/30/2015 11:30 AM'
+BRACKET_DATE_FMT_STR = '%m/%d/%Y %I:%M %p'
+
+# Example date: Sat '8/29 2015 9:30 AM'
+POOL_DATE_FMT_STR = '%a %m/%d %Y %I:%M %p'
 
 
 class GameModelError(Exception):
@@ -205,10 +212,10 @@ class GameSource(ndb.Model):
     source = GameSource()
     source.type = proto_obj.type
     if proto_obj.update_time_utc_str:
-      source.update_date_time = datetime.datetime.strptime(
+      source.update_date_time = datetime.strptime(
           proto_obj.update_time_utc_str, tweets.DATE_PARSE_FMT_STR)
     else:
-      source.update_date_time = datetime.datetime.now()
+      source.update_date_time = datetime.now()
     if proto_obj.twitter_account:
       source.account_id = long(proto_obj.twitter_account.id_str)
       source.tweet_text = proto_obj.tweet_text
@@ -234,7 +241,7 @@ class GameSource(ndb.Model):
       source.update_time_utc_str = self.update_date_time.strftime(
           tweets.DATE_PARSE_FMT_STR)
     else:
-      source.update_time_utc_str = datetime.datetime.now().strftime(
+      source.update_time_utc_str = datetime.now().strftime(
           tweets.DATE_PARSE_FMT_STR)
     if self.account_id:
       account = scores_messages.TwitterAccount()
@@ -308,6 +315,9 @@ class Game(ndb.Model):
   # Last time the Game was updated.
   last_modified_at = ndb.DateTimeProperty('lm')
 
+  # If crawled from Score Reporter, the given start time.
+  start_time = ndb.DateTimeProperty('st')
+
   @classmethod
   def FromProto(cls, proto_obj):
     """Builds a Game object from a protobuf object."""
@@ -373,6 +383,8 @@ class Game(ndb.Model):
         Team(score_reporter_id=team_tourney_map.get(info.away_team_link, '')),
     ]
 
+    start_time = ParseStartTime(info.date, info.time)
+
     scores = []
     try:
       scores = [int(info.home_team_score),
@@ -387,7 +399,7 @@ class Game(ndb.Model):
         scores = [-1, -1]
     source = GameSource(type=scores_messages.GameSourceType.SCORE_REPORTER,
         score_reporter_url=info.tourney_id,
-        update_date_time=datetime.datetime.utcnow()) 
+        update_date_time=datetime.utcnow()) 
       
     name = info.bracket_title or info.pool_name
     status = scores_messages.GameStatus.UNKNOWN
@@ -404,7 +416,8 @@ class Game(ndb.Model):
         league=scores_messages.League.USAU,
         game_status=status,
         created_at=info.created_at,
-        last_modified_at=datetime.datetime.utcnow(),
+        start_time=start_time,
+        last_modified_at=datetime.utcnow(),
         sources=[source],
         key=game_key_full(info.id))
 
@@ -425,3 +438,64 @@ class Game(ndb.Model):
     if self.sources:
       game.last_update_source = self.sources[0].ToProto()
     return game
+
+def ParseStartTime(game_date, game_time):
+  """Best-effort parsing of game date and time.
+
+  Score reporter date / time comes in two flavors:
+    'Sat 8/29' and '9:30 AM' or '8/29/2015 9:30 AM' and ''.
+
+  This function tries to parse both and returns anything
+  successful. For the unknown year, it tries this year,
+  next, and prior, and returns the one closest to now.
+    
+
+  Args:
+    game_date: (string) parsed date from Score Reporter.
+    game_time: (string) parsed time from Score Reporter.
+  Returns:
+    A datetime object If the strings can be parsed,
+    otherwise None.
+  """
+  if not game_date:
+    return None
+
+  # TODO: Find timezone of tournament based on GeoPt coordinates once
+  # the Maps API integration is in place. For now, we just pretend all
+  # tweets are from the mountain timezone, which should be close enough
+  # for most purposes.
+  utc_offset = timedelta(hours=7)
+
+  full_date_str = ''
+  try:
+    d = int(game_date[0])
+    return datetime.strptime(game_date, BRACKET_DATE_FMT_STR) + utc_offset
+  except ValueError:
+    pass
+
+  # This means we have to guess the year :(
+  current_year = datetime.utcnow().year
+  max_delta = timedelta(days=(365 * 10))
+  # We need to apply the closest date to crawl time, so we have to fix
+  # the 'now' in this test.
+  now = datetime(2016, 1, 9, 9, 30)
+  correct_date = now
+  # TODO: pass in the date parsed from the tournament landing page
+  # and avoid this guessing game.
+  # TODO: needs to be UTC to match twitter scores. Ensure test uses
+  # actual twitter date format string.
+  for year in [current_year, current_year - 1, current_year + 1]:
+    full_date_str = '%s %s %s' % (game_date, year, game_time)
+    try: 
+      dt = datetime.strptime(full_date_str, POOL_DATE_FMT_STR)
+    except ValueError:
+      # Fall through, we will return None if nothing works.
+      continue
+    if abs(now - dt) < max_delta:
+      max_delta = abs(now - dt)
+      correct_date = dt
+  
+  if correct_date != now:
+    return correct_date + utc_offset
+  return None
+

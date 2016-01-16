@@ -27,6 +27,7 @@ from google.appengine.ext import ndb
 DEFAULT_TWEET_DB_NAME = 'tweet_db'
 DEFAULT_AUTHOR_DB_NAME = 'author_db'
 
+# Example data: 'Wed Dec 10 21:00:24 2014'
 DATE_PARSE_FMT_STR = '%a %b %d %H:%M:%S %Y'
 
 # On App Engine prod this will be set correctly, but in a unittest environment

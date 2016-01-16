@@ -253,6 +253,19 @@ class GameModelTest(unittest.TestCase):
     game.last_update_source.type = scores_messages.GameSourceType.SCORE_REPORTER
     self.assertEquals(game, game_model.Game.FromProto(game).ToProto())
 
+  def testParseStartTime(self):
+    now = datetime.datetime.utcnow()
+    # Games are parsed assuming mountain timezone, so UTC time will
+    # be seven hours in the future.
+    self.assertEqual(datetime.datetime(2015, 8, 29, 16, 30),
+        game_model.ParseStartTime('Sat 8/29', '9:30 AM'))
+    self.assertEqual(datetime.datetime(2016, 2, 29, 16, 30),
+        game_model.ParseStartTime('Mon 2/29', '9:30 AM'))
+    self.assertEqual(datetime.datetime(2015, 8, 30, 18, 30),
+        game_model.ParseStartTime('8/30/2015 11:30 AM', ''))
+    self.assertEqual(None, game_model.ParseStartTime('bad date', ''))
+    self.assertEqual(None, game_model.ParseStartTime('Sat 8/29', '-11'))
+
 
 if __name__ == '__main__':
   unittest.main()

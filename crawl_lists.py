@@ -27,6 +27,7 @@ from google.appengine.ext import ndb
 from game_model import Game
 from game_model import GameSource
 from game_model import Team
+from game_model import Tournament
 from scores_messages import AgeBracket
 from scores_messages import Division
 from scores_messages import GameSourceType
@@ -480,16 +481,34 @@ class CrawlListHandler(webapp2.RequestHandler):
             ).order(-tweets.Tweet.created_at)
         twts_future = tweet_query.fetch_async()
 
-    # Only pull up games for the last two weeks.
-    # TODO(NEXT): run a separate query for games populated from score reporter, which
-    # may have been created weeks before the actual game.
-    games_query = Game.query(Game.division == division,
+    # For Twitter, only pull up games for the last two weeks.
+    twit_games_query = Game.query(Game.division == division,
         Game.age_bracket == age_bracket,
         Game.league == league,
         Game.last_modified_at > games_start - timedelta(weeks=1),
         Game.last_modified_at < games_start).order(
             -Game.last_modified_at)
-    games_future = games_query.fetch_async()
+    twit_games_future = twit_games_query.fetch_async()
+
+    tourney_ids = []
+    if league == League.USAU:
+      tourneys_query = Tournament.query(
+          Tournament.end_date < games_start + timedelta(days=3))
+      tourneys = tourneys_query.fetch(100)
+      for tourney in tourneys:
+        if not tourney.sub_tournaments:
+          continue
+        for st in tourney.sub_tournaments:
+          if st.division == division and st.age_bracket == age_bracket:
+            tourney_ids.append(tourney.id_str)
+
+    if tourney_ids:
+      # For SR, pull up games scheduled for a day in either direction.
+      sr_games_query = Game.query(Game.division == division,
+          Game.age_bracket == age_bracket,
+          Game.league == league,
+          Game.tournament_id.IN(tourney_ids))
+      sr_games_future = sr_games_query.fetch_async()
 
     if not backfill_date:
       token_manager = oauth_token_manager.OauthTokenManager()
@@ -516,7 +535,10 @@ class CrawlListHandler(webapp2.RequestHandler):
         twts = twts_future.get_result()
       users = {}
 
-    existing_games = games_future.get_result()
+    existing_games = twit_games_future.get_result()
+    if tourney_ids:
+      sr_existing_games = sr_games_future.get_result()
+      existing_games.extend(sr_existing_games)
     self.UpdateGames(twts, existing_games, users, division, age_bracket, league)
     # TODO(SOON): Consider merging the games if they are appropriately consistent.
 
@@ -690,7 +712,7 @@ class CrawlListHandler(webapp2.RequestHandler):
     sr_source = False
     for source in game.sources:
       if source.type != GameSourceType.TWITTER:
-        if source.teams and source.teams[0].score_reporter_id != UNKNOWN_SR_ID:
+        if game.teams and game.teams[0].score_reporter_id != UNKNOWN_SR_ID:
           sr_source = True
         continue
       account = source.account_id
@@ -723,6 +745,7 @@ class CrawlListHandler(webapp2.RequestHandler):
           return
 
     if len(teams_in_game) == len(sorted_teams):
+      # TODO(next): there is a bug here
       if sorted_teams[0][1] in teams_in_game:
         return
 
@@ -840,32 +863,40 @@ class CrawlListHandler(webapp2.RequestHandler):
           # So one of the teams is the same. If this game happened within the last few
           # hours it's probably the same game.
           max_game_length = timedelta(hours=MAX_LENGTH_OF_GAME_IN_HOURS)
-          if twt.created_at > game.last_modified_at:
-            if twt.created_at - game.last_modified_at >= max_game_length:
+
+          compare_time = game.last_modified_at
+          if game.start_time and game.start_time > game.last_modified_at:
+            compare_time = game.start_time
+
+          if twt.created_at < compare_time:
+            if abs(twt.created_at - compare_time) >= max_game_length:
               logging.debug('game too old, skipping')
               continue
 
-          if twt.created_at < game.last_modified_at:
-            if game.last_modified_at - twt.created_at >= max_game_length:
+          if twt.created_at < compare_time:
+            if game.last_modified_at - compare_time >= max_game_length:
               logging.debug('game too new, skipping')
               continue
 
           new_scores = games.Scores.FromList(scores, ordered=False)
           score = self._CompareScoresFromAllSources(
-              twt, new_scores, game.sources)
+              twt, new_scores, game.sources, compare_time)
           if score > most_consistent[0]:
             most_consistent = [score, game]
 
     return most_consistent
 
-  def _CompareScoresFromAllSources(self, twt, new_scores, sources):
+  def _CompareScoresFromAllSources(self, twt, new_scores, sources, 
+      compare_time):
     """Compare consistency of this score with all other scores in the game.
 
     Args:
       twt: tweets.Tweet object
       new_scores: games.Scores object from this tweet.
       sources: List of game sources from this game.
-
+      compare_time: datetime.datetime object for comparison time if
+        last update came from score reporter (may be different than the
+        update_time if the start time of the game is more recent).
 
     Returns:
       A confidence score of the match of this tweet with the game.
@@ -887,12 +918,17 @@ class CrawlListHandler(webapp2.RequestHandler):
       if (source.home_score is None) or (source.away_score is None):
         continue
 
+      ordered = False
+      update_time = source.update_date_time
+      if type == scores_messages.GameSourceType.SCORE_REPORTER:
+        ordered = True
+        update_time = compare_time
+
       old_scores = games.Scores.FromList(
-          [source.home_score, source.away_score],
-          ordered=(type == scores_messages.GameSourceType.SCORE_REPORTER))
+          [source.home_score, source.away_score], ordered=ordered)
       
-      if source.update_date_time < oldest_source_time:
-        oldest_source_time = source.update_date_time
+      if update_time < oldest_source_time:
+        oldest_source_time = update_time
 
       # The comparison function will return -1 if the games are 
       # clearly from different games.
@@ -902,14 +938,14 @@ class CrawlListHandler(webapp2.RequestHandler):
       # Handles case where this is the first tweet we've seen of this game
       # since a new crawl.
       if new_scores >= old_scores:
-        if twt.created_at >= source.update_date_time:
+        if twt.created_at >= update_time:
           numerator += 1
           continue
 
       # Handles case where this is a tweet we've seen of this game
       # during this crawl but not the first in this crawl.
       if new_scores <= old_scores:
-        if twt.created_at <= source.update_date_time:
+        if twt.created_at <= update_time:
           numerator += 1
           continue
 

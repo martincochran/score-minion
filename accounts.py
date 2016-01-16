@@ -83,7 +83,7 @@ def IndexAccountData(screen_name, num_tweets, fetcher):
     fetcher: The twitter_fetcher.TwitterFetcher object used for fetching
   """
   try:
-    json_obj = fetcher.LoadTimeline(screen_name, count=num_tweets)
+    json_obj = fetcher.UserTimeline(screen_name, count=num_tweets)
   except twitter_fetcher.FetchError as e:
     logging.warning('Could not load timeline for user %s', screen_name)
     return

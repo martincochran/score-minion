@@ -68,7 +68,7 @@ class TwitterFetcherTest(unittest.TestCase):
     self.testbed.deactivate()
  
   def testLoadTimeline(self):
-    """Test basic LoadTimeline functionality."""
+    """Test basic UserTimeline functionality."""
     self.return_statuscode = [200]
 
     # Some common fields in the response content
@@ -82,7 +82,7 @@ class TwitterFetcherTest(unittest.TestCase):
     ]
     self.return_content = ['[{%s}]' % ','.join(content_items)]
 
-    json_obj = self.fetcher.LoadTimeline('martin_cochran')
+    json_obj = self.fetcher.UserTimeline('martin_cochran')
     self.assertEquals(type(json_obj), list)
 
   def testLoadTimeline_badMemberId(self):
@@ -91,7 +91,7 @@ class TwitterFetcherTest(unittest.TestCase):
     self.return_content = ['{"errors":[{"message":"Sorry, that page does not exist","code":34}]}']
 
     try:
-      timeline = self.fetcher.LoadTimeline('bad_twitter_member_id')
+      timeline = self.fetcher.UserTimeline('bad_twitter_member_id')
     except twitter_fetcher.FetchError:
       # Expected
       pass
@@ -102,7 +102,7 @@ class TwitterFetcherTest(unittest.TestCase):
     self.return_content = ['']
 
     try:
-      timeline = self.fetcher.LoadTimeline('%s')
+      timeline = self.fetcher.UserTimeline('%s')
     except twitter_fetcher.FetchError:
       # Expected
       pass
@@ -117,7 +117,7 @@ class TwitterFetcherTest(unittest.TestCase):
         '{"token_type":"bearer","access_token":"new access token"}',
         '{"id_str": "1"}',
     ]
-    timeline = self.fetcher.LoadTimeline('martin_cochran')
+    timeline = self.fetcher.UserTimeline('martin_cochran')
 
   def testReAuthenticate(self):
     self.return_statuscode = [200, 200]
@@ -127,7 +127,7 @@ class TwitterFetcherTest(unittest.TestCase):
     ]
 
     self.fetcher._ReAuthenticate()
-    timeline = self.fetcher.LoadTimeline('martin_cochran')
+    timeline = self.fetcher.UserTimeline('martin_cochran')
 
   def testHandleTooManyRedirects(self):
     def _FakeFetch(url, payload, method, headers, request, response,
@@ -138,7 +138,7 @@ class TwitterFetcherTest(unittest.TestCase):
 
     self.url_fetch_stub._RetrieveURL = _FakeFetch
     try:
-      timeline = self.fetcher.LoadTimeline('martin_cochran')
+      timeline = self.fetcher.UserTimeline('martin_cochran')
       self.fail('Should have thrown an error')
     except twitter_fetcher.FetchError as e:
       # Expected
@@ -154,7 +154,7 @@ class TwitterFetcherTest(unittest.TestCase):
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
     try:
-      timeline = self.fetcher.LoadTimeline('martin_cochran')
+      timeline = self.fetcher.UserTimeline('martin_cochran')
       self.fail('Should have thrown an error')
     except twitter_fetcher.FetchError as e:
       # Expected
@@ -170,7 +170,7 @@ class TwitterFetcherTest(unittest.TestCase):
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
     try:
-      timeline = self.fetcher.LoadTimeline('martin_cochran')
+      timeline = self.fetcher.UserTimeline('martin_cochran')
       self.fail('Should have thrown an error')
     except twitter_fetcher.FetchError as e:
       # Expected
@@ -186,7 +186,7 @@ class TwitterFetcherTest(unittest.TestCase):
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
     try:
-      timeline = self.fetcher.LoadTimeline('martin_cochran')
+      timeline = self.fetcher.UserTimeline('martin_cochran')
       self.fail('Should have thrown an error')
     except twitter_fetcher.FetchError as e:
       # Expected
@@ -202,7 +202,7 @@ class TwitterFetcherTest(unittest.TestCase):
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
     try:
-      timeline = self.fetcher.LoadTimeline('martin_cochran')
+      timeline = self.fetcher.UserTimeline('martin_cochran')
       self.fail('Should have thrown an error')
     except twitter_fetcher.FetchError as e:
       # Expected
@@ -218,7 +218,7 @@ class TwitterFetcherTest(unittest.TestCase):
     self.url_fetch_stub._RetrieveURL = _FakeFetch
 
     try:
-      timeline = self.fetcher.LoadTimeline('martin_cochran')
+      timeline = self.fetcher.UserTimeline('martin_cochran')
       self.fail('Should have thrown an error')
     except twitter_fetcher.FetchError as e:
       # Expected

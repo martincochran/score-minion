@@ -698,6 +698,8 @@ class CrawlListHandler(webapp2.RequestHandler):
   def _UpdateGameConsistency(self, game, user_map):
     """Update the game consistency.
 
+    TODO(SOON): evaluate whether or not this is needed anymore.
+
     This function will do data clean-up to ensure there are two teams
     per game, that the score reflects the right teams, etc.
 
@@ -726,6 +728,10 @@ class CrawlListHandler(webapp2.RequestHandler):
     # Take the top 2
     if not sorted_teams and not sr_source:
       logging.error('Didn\'t find any teams: %s', game)
+      return
+
+    if sr_source:
+      logging.error('Score reporter source: no need to update: %s', game)
       return
 
     teams_in_game = set()
@@ -786,13 +792,13 @@ class CrawlListHandler(webapp2.RequestHandler):
       return
 
     teams = self._FindTeamsInTweet(twt, user_map)
-    logging.info('teams: %s', teams)
+    logging.debug('teams: %s', teams)
     scores = [twt.entities.integers[score_indicies[0]].num,
           twt.entities.integers[score_indicies[1]].num]
-    logging.info('scores: %s', scores)
+    logging.debug('scores: %s', scores)
     (consistency_score, game) = self._FindMostConsistentGame(
         twt, existing_games + added_games, teams, division, age_bracket, league, scores)
-    logging.info('consistency score %s for twt %s', consistency_score, twt.text)
+    logging.debug('consistency score %s for twt %s', consistency_score, twt.text)
     # TODO: detect tweets that are summaries for the day (eg, "We went
     # 3-0 today")
     # Some examples:

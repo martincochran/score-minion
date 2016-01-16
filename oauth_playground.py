@@ -66,7 +66,7 @@ class OauthPlaygroundHandler(webapp2.RequestHandler):
 
     # Do the requests
     try:
-      template_values['user_timeline_response'] = fetcher.LoadTimeline(
+      template_values['user_timeline_response'] = fetcher.UserTimeline(
           template_values['account'], count=template_values['num'])
     except twitter_fetcher.FetchError as e:
       template_values['user_timeline_response'] = e

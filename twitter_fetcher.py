@@ -66,8 +66,7 @@ class TwitterFetcher:
     self.secret_string = token_manager.GetSecret()
     self.bearer_token = token_manager.GetToken()
 
-  # TODO: change name to 'UserTimeline' to match the twitter API.
-  def LoadTimeline(self, screen_name, count=1):
+  def UserTimeline(self, screen_name, count=1):
     """Fetches the last count posts from the timeline of screen_name.
 
     Args:

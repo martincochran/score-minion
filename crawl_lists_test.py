@@ -1350,6 +1350,32 @@ class CrawlListsTest(web_test_base.WebTestBase):
     self.assertEqual(2, len(game.teams))
     self.assertEqual(2, game.teams[0].twitter_id)
 
+  def testUpdateGameConsistency_srSource(self):
+    """Test updating games with a SR source."""
+    # Create game with only one team and one game source.
+    game = Game()
+    game.sources = [GameSource(type=GameSourceType.SCORE_REPORTER)]
+
+    game.teams = [
+        Team(score_reporter_id='1'),
+        Team(score_reporter_id='2'),
+    ]
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    crawl_lists_handler._UpdateGameConsistency(game, {})
+    self.assertEqual(2, len(game.teams))
+
+  def testUpdateGameConsistency_srSource(self):
+    """Test updating games with a SR source and no games."""
+    # Create game with only one team and one game source.
+    game = Game()
+    game.sources = [GameSource(type=GameSourceType.SCORE_REPORTER)]
+
+    crawl_lists_handler = crawl_lists.CrawlListHandler()
+    crawl_lists_handler._UpdateGameConsistency(game, {})
+
+    # It doesn't do anything in this case.
+    self.assertEqual(0, len(game.teams))
+
 
 if __name__ == '__main__':
   unittest.main()

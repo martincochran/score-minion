@@ -110,7 +110,7 @@ class TwitterFetcher:
     """
     pass
 
-  def LookupUsers(self, user_id):
+  def LookupUsers(self, user_id, use_screen_name=False):
     """Lookup the info for a set of users.
 
     Rate limit: 60 / 15 minute window.
@@ -122,9 +122,14 @@ class TwitterFetcher:
       List of Twitter user json objects.
     """
     url = '%s%s' % (self.API_BASE_URL, self.LOOKUP_USERS_URL)
-    params = {
-      'user_id': user_id,
-    }
+    if use_screen_name:
+      params = {
+        'screen_name': user_id,
+      }
+    else:
+      params = {
+          'user_id': user_id,
+      }
     response = self._FetchResults(url, params=params)
     return response
 

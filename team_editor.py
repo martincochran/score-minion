@@ -108,7 +108,7 @@ class TeamEditorHandler(webapp2.RequestHandler):
     token_manager = oauth_token_manager.OauthTokenManager()
     fetcher = twitter_fetcher.TwitterFetcher(token_manager)
     try:
-      json_obj = fetcher.LookupUsers(screen_name)
+      json_obj = fetcher.LookupUsers(screen_name, use_screen_name=True)
     except twitter_fetcher.FetchError as e:
       msg = 'Could not lookup users %s, %s' % (screen_name, e)
       logging.warning(msg)

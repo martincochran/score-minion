@@ -94,6 +94,8 @@ class Team(ndb.Model):
   twitter_id = ndb.IntegerProperty('t_id')
 
   # ID of team on score reporter
+  # TODO(NEXT): UCSB's B team lists the A-team's twitter account. Need to
+  # ensure there is only one team.
   score_reporter_id = ndb.StringProperty('sr_u')
 
   @classmethod

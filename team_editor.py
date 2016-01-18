@@ -44,7 +44,7 @@ class TeamListHandler(webapp2.RequestHandler):
   def get(self):
     query = game_model.Team.query(
         game_model.Team.twitter_id == None)
-    teams = query.fetch(50)
+    teams = query.fetch(200)
 
     # Double-quote the team IDs to get around automatic un-quoting
     # by template framework.

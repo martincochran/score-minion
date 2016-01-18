@@ -12,4 +12,8 @@ cron:
 
 - description: Update all users
   url: /tasks/crawl_all_users
-  schedule: every 2 hours
+  schedule: every friday 09:00
+
+- description: Update score reporter
+  url: /tasks/sr/crawl
+  schedule: every thursday,friday,saturday,sunday,monday 20:00

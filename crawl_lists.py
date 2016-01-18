@@ -445,6 +445,7 @@ class CrawlUserHandler(webapp2.RequestHandler):
       msg = 'Could not lookup users %s' % user_id_param
       logging.warning('%s: %s', msg, e)
       self.response.write(msg)
+      return
 
     for json_user in json_obj:
       UpdateUser(json_user, {})

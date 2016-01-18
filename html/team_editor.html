@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+{% autoescape false %}
+<html>
+  <head>
+  <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+  </head>
+  <body>
+    <table>
+      <tr>
+        <td><b>Team ID</b></td>
+        <td><b>Twitter ID</b></td>
+        <td><b>Edit</b></td>
+      </tr>
+      {% for team in teams %}
+      <tr>
+      <td>{{ team.score_reporter_id }}</td>
+      <td>{{ team.twitter_id }}</td>
+      <td><a href="/teams/edit?id={{ team.score_reporter_id }}">edit</a></td>
+      </tr>
+    {% endfor %}
+    </table>
+
+  </body>
+</html>
+{% endautoescape %}

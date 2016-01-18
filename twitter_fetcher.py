@@ -118,6 +118,8 @@ class TwitterFetcher:
 
     Args:
       user_id: comma-separated list of user ids - at most 100
+    Returns:
+      List of Twitter user json objects.
     """
     url = '%s%s' % (self.API_BASE_URL, self.LOOKUP_USERS_URL)
     params = {

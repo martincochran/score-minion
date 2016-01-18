@@ -259,6 +259,7 @@ class TwitterFetcherTest(unittest.TestCase):
     # Some common fields in the response content
     content_items = [
         '"id_str":"186815046"',
+        '"id":186815046',
         '"screen_name":"bob"',
     ]
     self.return_content = ['[{%s}]' % ','.join(content_items)]

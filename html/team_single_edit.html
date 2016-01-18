@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+{% autoescape false %}
+<html>
+  <head>
+  <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+  </head>
+  <body>
+    <form action="/teams/edit" method="post">
+      Team info
+      <div><input type=text name="id" value={{sr_id}}></textarea></div>
+      <div><input type=text name="screen_name" value={{screen_name}}></textarea></div>
+      <div><input type="submit" value="Update team info"></div>
+    </form>
+    <div>
+    <b>Team info</b>
+    <br>{{ name }}
+    <br><a href="{{ team_link }}">score reporter profile</a>
+    <br><a href="{{ twitter_search }}">twitter search</a>
+    </div>
+  </body>
+</html>
+{% endautoescape %}

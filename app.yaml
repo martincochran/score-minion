@@ -1,5 +1,5 @@
 application: omega-bearing-780
-version: alpha-000-050
+version: alpha-000-051
 runtime: python27
 api_version: 1
 threadsafe: no
@@ -20,7 +20,6 @@ handlers:
 # Public handler to view tweets
 - url: /show_tweets.*
   script: show_tweets.app
-  login: admin
 
 # Admin handlers
 - url: /oauth/admin.*
@@ -44,6 +43,10 @@ handlers:
 
 - url: /tasks/sr/list.*
   script: score_reporter_handler.app
+  login: admin
+
+- url: /teams/.*
+  script: team_editor.app
   login: admin
 
 ### Twitter

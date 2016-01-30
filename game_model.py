@@ -96,6 +96,10 @@ class Team(ndb.Model):
   # ID of team on score reporter
   # TODO(NEXT): UCSB's B team lists the A-team's twitter account. Need to
   # ensure there is only one team.
+  # See also Arizona State-C (http://play.usaultimate.org/teams/events/Eventteam/?TeamId=OI%2fLAL7UzQ1fmx1Zfe2sp%2btWu%2b77BQH91GrFaX2EK1c%3d)
+  # Bad entry: WCN5wzaUHStOAq5MsopkH6azfgxOtBc9osLJJzbr2%252FE%253D
+  # Bad entry: WCN5wzaUHStOAq5MsopkH6azfgxOtBc9osLJJzbr2%252fE%253d
+  # Bad entry: iRedIuNSEU%252bVbvgYot3d3pXMgds7j2m4fYF7OBRwdnk%253d (men's team twitter account vs. women's team SR ID)
   score_reporter_id = ndb.StringProperty('sr_u')
 
   @classmethod

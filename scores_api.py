@@ -38,6 +38,9 @@ from scores_messages import GamesRequest
 from scores_messages import GamesResponse
 from scores_messages import League
 from scores_messages import Team
+from scores_messages import TournamentsRequest
+from scores_messages import TournamentsResponse
+from scores_messages import GamesResponse
 from scores_messages import TwitterAccount
 
 import game_model
@@ -59,6 +62,28 @@ USAU_PREFIX = 'https://play.usaultimate.org'
                #auth_level=AUTH_LEVEL.OPTIONAL)
 class ScoresApi(remote.Service):
   """Class which defines Score Minion API v1."""
+
+  @endpoints.method(TournamentsRequest, TournamentsResponse,
+                    path='tournaments', http_method='GET')
+  def GetTournaments(self, request):
+    """Exposes an API endpoint to retrieve the latest tournaments.
+
+    Can be referenced on dev server by using the following URL:
+    http://localhost:8080/_ah/api/scores/v1/tournaments
+
+    Args:
+        request: An instance of TournamentsRequest parsed from the API request.
+    Returns:
+        An instance of TournamentsResponse with the set of known games matching
+        the request parameters.
+    """
+    # If the lists haven't been crawled in a while, crawl them.
+    response = TournamentsResponse()
+    response.tournaments = []
+    for tourney in self._LookupMatchingTourneys(request):
+      proto_tourney = tourney.ToProto()
+      response.tournaments.append(proto_tourney)
+    return response
 
   @endpoints.method(GamesRequest, GamesResponse,
                     path='all_games', http_method='GET')
@@ -172,6 +197,25 @@ class ScoresApi(remote.Service):
     if not count:
       count = num
     return games_query.fetch(count)
+
+  @staticmethod
+  def _LookupMatchingTourneys(request, num=10):
+    """Returns a set of tournaments from the DB matching the request criteria.
+
+    Args:
+      request: TournamentsRequest object specifying what tournaments to look up
+      num: Number of tournaments to retrieve from the DB
+
+    Returns:
+      The list of game_model.Tournament objects that match the criteria.
+    """
+    query = game_model.Tournament.query()
+    query = query.order(-game_model.Tournament.start_date)
+
+    count = request.count
+    if not count:
+      count = num
+    return query.fetch(count)
 
   @staticmethod
   def _PossiblyEnqueueCrawling():

@@ -288,6 +288,15 @@ class Tournament(ndb.Model):
   # Location of tournament
   location = ndb.GeoPtProperty('l')
 
+  def ToProto(self):
+    """Builds a Tournament protobuf object from this instance."""
+    tourney = scores_messages.Tournament()
+    tourney.id_str = self.id_str
+    tourney.url = self.url
+    tourney.name = self.name
+    return tourney
+
+
 class Game(ndb.Model):
   """Information about a single game including all sources."""
   id_str = ndb.StringProperty('id', required=True)

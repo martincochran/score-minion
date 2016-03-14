@@ -140,6 +140,20 @@ class GameModelTest(unittest.TestCase):
     converted_game = game_model.Game.FromGameInfo(game_info, {})
     self.assertEqual([-1, -1], converted_game.scores)
 
+  def testTournamentSerialization(self):
+    """Verify serialization between Tourney protobuf and ndb classes."""
+    tourney = game_model.Tournament()
+    tourney.name = 'name'
+    tourney.url = 'url'
+    tourney.id_str = '1234'
+    tpb = tourney.ToProto()
+
+    expected_tourney = scores_messages.Tournament()
+    expected_tourney.name = 'name'
+    expected_tourney.url = 'url'
+    expected_tourney.id_str = '1234'
+    self.assertEquals(expected_tourney, tpb)
+
   def testTeamSerialization(self):
     """Verify serialization between Team protobuf and ndb classes."""
     # Serialize with full account

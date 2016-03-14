@@ -118,6 +118,17 @@ class GameSource(messages.Message):
   tweet_text = messages.StringField(5)
 
 
+class Tournament(messages.Message):
+  """Information to represent a tournament."""
+  id_str = messages.StringField(1)
+
+  url = messages.StringField(2)
+
+  name = messages.StringField(3)
+
+  # TODO: add sub-tournaments
+
+
 class Game(messages.Message):
   """Information to represent a game."""
   # Teams involved in the game.
@@ -152,6 +163,27 @@ class Game(messages.Message):
 
   # Source of most recent game update.
   last_update_source = messages.MessageField(GameSource, 11)
+
+
+class TournamentsRequest(messages.Message):
+  """ProtoRPC representation of a request for tournaments."""
+  # Pagination token returned in a prior TournamentsResponse. To paginate through
+  # a series of results, this should be passed in subsequent calls to
+  # GetGames.
+  pagination_token = messages.StringField(1)
+
+  # Maximum number of tournaments that should be returned. If not specified, the
+  # server is responsible for picking a suitable number.
+  count = messages.IntegerField(4)
+
+
+class TournamentsResponse(messages.Message):
+  """Response for GetTournaments."""
+
+  pagination_token = messages.StringField(1)
+
+  tournaments = messages.MessageField(Tournament, 2, repeated=True)
+
 
 
 class GamesRequest(messages.Message):

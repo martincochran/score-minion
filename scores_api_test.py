@@ -69,6 +69,11 @@ class ScoresApiTest(web_test_base.WebTestBase):
     self.assertEqual(scores_messages.GamesResponse(),
         self.api.GetGames(scores_messages.GamesRequest()))
 
+  def testSanityGetTournaments(self):
+    """Ensure no exceptions are thrown on simple requests to GetTournaments."""
+    self.assertEqual(scores_messages.TournamentsResponse(),
+        self.api.GetTournaments(scores_messages.TournamentsRequest()))
+
   def testSanityGetGameInfo(self):
     """Ensure no exceptions are thrown on simple requests to GetGameInfo."""
     self.assertEqual(scores_messages.GameInfoResponse(),

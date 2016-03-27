@@ -66,6 +66,17 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
         'schedule/Women/College-Women/')],
       self.crawler.GetDivisions(content))
 
+  def testGetDates(self):
+    content = self.testdata.GetLinkedTournamentLandingPage()
+    self.assertEqual(
+        (datetime.datetime(2015, 1, 29, 0, 8), datetime.datetime(2015, 1, 30, 0, 8)),
+        self.crawler.GetDates(content))
+
+    content = self.testdata.GetMultiDivisionTournamentLandingPage()
+    self.assertEqual(
+        (datetime.datetime(2015, 1, 22, 0, 5), datetime.datetime(2015, 1, 25, 0, 5)),
+        self.crawler.GetDates(content))
+
   def testParseTournamentInfo(self):
     """Verify we can parse the correct tourney info from the landing page."""
     url = 'http://a'

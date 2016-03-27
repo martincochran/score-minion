@@ -109,10 +109,13 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
     crawler = score_reporter_crawler.ScoreReporterCrawler()
     tournaments = crawler.GetDivisions(response.content)
 
+    start_date, end_date = crawler.GetDates(response.content)
+
     full_url = '%s%s' % (USAU_URL_PREFIX, url)
     key = game_model.tourney_key_full(url)
     tourney_pb = game_model.Tournament(
         key=key, id_str=url, url=full_url, name=url.replace('-', ' '),
+        start_date=start_date, end_date=end_date,
         last_modified_at=datetime.utcnow())
     crawl_url = '/tasks/sr/crawl_tournament'
     for tourney_info in tournaments:
@@ -126,11 +129,10 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
             'division': tourney_info[0].name,
             'age_bracket': tourney_info[1].name},
           queue_name='score-reporter')
-      # If the tournament hasn't been crawled yet - OR -
+      # TODO(NEXT): If the tournament hasn't been crawled yet - OR -
       # the tournament isn't current for some definition of current,
       # add task to crawl the scores in that tournament.
 
-    # TODO(NEXT): add the tournament start/end date to the proto.
     existing_tourney = key.get()
     if not existing_tourney:
       tourney_pb.put()
@@ -138,6 +140,8 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
     if len(tourney_pb.sub_tournaments) > len(existing_tourney.sub_tournaments):
       existing_tourney.sub_tournaments = tourney_pb.sub_tournaments
       existing_tourney.last_modified_at = tourney_pb.last_modified_at
+      existing_tourney.start_date = tourney_pb.start_date
+      existing_tourney.end_date = tourney_pb.end_date
       existing_tourney.put()
 
 

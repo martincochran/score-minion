@@ -16,6 +16,7 @@
 
 from datetime import datetime, timedelta
 import logging
+import re
 import uuid
 
 from HTMLParser import HTMLParser
@@ -195,6 +196,32 @@ class ScoreReporterCrawler(object):
     parser = DivisionParser()
     parser.feed(content)
     return parser.get_divisions()
+
+  def GetDates(self, content):
+    """Returns the start- and end-dates for a given tournament landing page.
+
+    Args:
+      content: Full HTML contents of tourney landing page.
+
+    Returns:
+      A pair of (time, time) of the start and end-dates of the tournament, both
+      of type datetime.datetime in UTC time.
+    """
+    one_date_re = '[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}'
+    date_re = r'(%s) - (%s)' % (one_date_re, one_date_re)
+    logging.info('re: %s' % date_re)
+    ro = re.compile(date_re)
+    m = ro.search(content)
+    logging.info('match: %s', m)
+    if not m or len(m.groups()) < 2:
+      return (None, None)
+
+    start_date = m.group(1)
+    end_date = m.group(2)
+    date_fmt = '%M/%d/%Y'
+    # Parse them into datetime format.
+    return (datetime.strptime(start_date, date_fmt),
+        datetime.strptime(end_date, date_fmt))
 
   def ParseTournamentInfo(self, content, url, division, age_bracket):
     """Parses the tournament info.

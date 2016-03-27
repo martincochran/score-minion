@@ -367,7 +367,7 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     self.SetHtmlResponse(FAKE_TOURNEY_SCORES_PAGE)
     params = {
         'url_suffix': 'schedule/Men/College-Men/',
-        'name': 'my_tourney',
+        'name': 'my-tourney',
         'division': 'OPEN',
         'age_bracket': 'COLLEGE'
     }
@@ -394,8 +394,8 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     self.assertEqual(scores_messages.Division.OPEN, games[0].division)
     self.assertEqual(scores_messages.AgeBracket.COLLEGE, games[0].age_bracket)
     self.assertEqual('71984', games[0].id_str)
-    self.assertEqual(full_url, games[0].tournament_id)
-    self.assertEqual('my_tourney', games[0].tournament_name)
+    self.assertEqual('my-tourney', games[0].tournament_id)
+    self.assertEqual('my tourney', games[0].tournament_name)
     self.assertEqual([15, 13], games[0].scores)
     self.assertEqual('456', games[0].teams[0].score_reporter_id)
     self.assertEqual('123', games[0].teams[1].score_reporter_id)

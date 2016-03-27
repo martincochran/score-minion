@@ -85,7 +85,7 @@ class GameModelTest(unittest.TestCase):
 
   def testGameSerialization_fromGameInfo(self):
     game_info = score_reporter_crawler.GameInfo('id', 'tourney_url',
-        'tourney_name',
+        'tourney-name',
         scores_messages.Division.OPEN,
         scores_messages.AgeBracket.NO_RESTRICTION)
     game_info.home_team_score = '5'
@@ -101,8 +101,8 @@ class GameModelTest(unittest.TestCase):
     self.assertEqual(scores_messages.AgeBracket.NO_RESTRICTION,
         converted_game.age_bracket)
     self.assertEqual('id', converted_game.id_str)
-    self.assertEqual('tourney_url', converted_game.tournament_id)
-    self.assertEqual('tourney_name', converted_game.tournament_name)
+    self.assertEqual('tourney-name', converted_game.tournament_id)
+    self.assertEqual('tourney name', converted_game.tournament_name)
     self.assertEqual([5, 6], converted_game.scores)
     self.assertEqual(scores_messages.GameStatus.FINAL,
         converted_game.game_status)

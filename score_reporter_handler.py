@@ -186,11 +186,6 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     tourney_info = crawler.ParseTournamentInfo(response.content, full_url,
         enum_division, enum_age_bracket)
 
-    # TODO(NEXT): tournament ID needs to match the ID in each game.
-    # Also, each tourney ID in the game links to the division as well,
-    # whereas this is technically the sub-tournament ID, so that
-    # needs to be figured out.
-
     game_infos = crawler.ParseGameInfos(response.content,
         full_url, name, enum_division, enum_age_bracket)
     for game_info in game_infos:

@@ -299,6 +299,8 @@ class Tournament(ndb.Model):
   # Location of tournament
   location = ndb.GeoPtProperty('l')
 
+  last_modified_at = ndb.DateTimeProperty('lu')
+
   def ToProto(self):
     """Builds a Tournament protobuf object from this instance."""
     tourney = scores_messages.Tournament()

@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import datetime
 import logging
 import urllib2
 import webapp2
@@ -111,7 +112,8 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
     full_url = '%s%s' % (USAU_URL_PREFIX, url)
     key = game_model.tourney_key_full(url)
     tourney_pb = game_model.Tournament(
-        key=key, id_str=url, url=full_url, name=url.replace('-', ' '))
+        key=key, id_str=url, url=full_url, name=url.replace('-', ' '),
+        last_modified_at=datetime.utcnow())
     crawl_url = '/tasks/sr/crawl_tournament'
     for tourney_info in tournaments:
       logging.info('tourney_info: %s', tourney_info)
@@ -128,12 +130,14 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
       # the tournament isn't current for some definition of current,
       # add task to crawl the scores in that tournament.
 
+    # TODO(NEXT): add the tournament start/end date to the proto.
     existing_tourney = key.get()
     if not existing_tourney:
       tourney_pb.put()
       return
     if len(tourney_pb.sub_tournaments) > len(existing_tourney.sub_tournaments):
       existing_tourney.sub_tournaments = tourney_pb.sub_tournaments
+      existing_tourney.last_modified_at = tourney_pb.last_modified_at
       existing_tourney.put()
 
 
@@ -170,12 +174,14 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       return
 
     crawler = score_reporter_crawler.ScoreReporterCrawler()
-    # TODO(P2): look to see if tourney is already in DB. If not, then
+    # TODO(NEXT): look to see if tourney is already in DB. If not, then
     # parse the tourney info from the page (only want to do
     # rarely to avoid using Maps API). It's possible that the
     # tournament exists but the sub-division does not yet exist and
     # this needs to be handled gracefully (probably by just updating
     # the division in an atomic read/write transaction).
+    # The last_modified_at time in the tournament DB entry needs to be
+    # updated in this case.
     full_url = '%s/%s' % (name, url)
     tourney_info = crawler.ParseTournamentInfo(response.content, full_url,
         enum_division, enum_age_bracket)

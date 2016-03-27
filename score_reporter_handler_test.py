@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import datetime
 import logging
 import mock
 import unittest
@@ -231,6 +232,7 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
         key=key,
         url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, 'my-tourney'),
         id_str='my-tourney', name='my tourney',
+        last_modified_at=got_tourney.last_modified_at,
         sub_tournaments=[game_model.SubTournament(
           division=scores_messages.Division.OPEN,
           age_bracket=scores_messages.AgeBracket.COLLEGE)
@@ -249,6 +251,7 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
   def testParseTourneyLandingPage_updateTourney(self, mock_add_queue):
     key = game_model.tourney_key_full('my-tourney')
     empty_tourney = game_model.Tournament(
+        last_modified_at=datetime.utcnow(),
         key=key,
         url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, 'my-tourney'),
         id_str='my-tourney', name='my tourney')
@@ -276,6 +279,7 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
         key=key,
         url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, 'my-tourney'),
         id_str='my-tourney', name='my tourney',
+        last_modified_at=got_tourney.last_modified_at,
         sub_tournaments=[game_model.SubTournament(
           division=scores_messages.Division.OPEN,
           age_bracket=scores_messages.AgeBracket.COLLEGE)

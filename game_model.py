@@ -25,6 +25,7 @@ import scores_messages
 import tweets
 
 DEFAULT_GAME_DB_NAME = 'game_db'
+DEFAULT_TOURNEY_DB_NAME = 'tourney_db'
 DEFAULT_TEAM_TABLE_NAME = 'team_db'
 FULL_INFO_TABLE_NAME = 'full_team_info_db'
 SR_TEAM_TABLE_NAME = 'team_db'
@@ -57,6 +58,16 @@ def game_key_full(game_id, game_table_name=DEFAULT_GAME_DB_NAME):
 def game_key(proto_obj):
   """Build a key from a scores_messages.Game protobuf object."""
   return game_key_full(proto_obj.id_str)
+
+
+# We want operations on an individual tournaments to be consistent.
+def tourney_key_full(tourney_id):
+  return ndb.Key('Tournament', '%s_%s' % (DEFAULT_TOURNEY_DB_NAME, tourney_id))
+
+
+def tourney_key(proto_obj):
+  """Build a key from a scores_messages.Tournament protobuf object."""
+  return tourney_key_full(proto_obj.id_str)
 
 
 # There are two tables for teams: Twitter accounts and Score Reporter ids.

@@ -189,7 +189,8 @@ class ScoreReporterCrawler(object):
       content: Full HTML contents of tourney landing page.
 
     Returns:
-      A list of (division, url) pairs of the divisions found in the contents.
+      A list of (division, age_bracket, url_suffix) tuples of the divisions
+      found in the contents.
     """
     parser = DivisionParser()
     parser.feed(content)

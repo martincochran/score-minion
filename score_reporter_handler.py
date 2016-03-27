@@ -108,9 +108,17 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
     crawler = score_reporter_crawler.ScoreReporterCrawler()
     tournaments = crawler.GetDivisions(response.content)
 
+    full_url = '%s%s' % (USAU_URL_PREFIX, url)
+    key = game_model.tourney_key_full(url)
+    tourney_pb = game_model.Tournament(
+        key=key, id_str=url, url=full_url, name=url.replace('-', ' '))
     crawl_url = '/tasks/sr/crawl_tournament'
     for tourney_info in tournaments:
       logging.info('tourney_info: %s', tourney_info)
+      tourney_pb.sub_tournaments.append(
+          game_model.SubTournament(
+            division=tourney_info[0],
+            age_bracket=tourney_info[1]))
       taskqueue.add(url=crawl_url, method='GET',
           params={'url_suffix': tourney_info[2], 'name': url,
             'division': tourney_info[0].name,
@@ -119,6 +127,14 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
       # If the tournament hasn't been crawled yet - OR -
       # the tournament isn't current for some definition of current,
       # add task to crawl the scores in that tournament.
+
+    existing_tourney = key.get()
+    if not existing_tourney:
+      tourney_pb.put()
+      return
+    if len(tourney_pb.sub_tournaments) > len(existing_tourney.sub_tournaments):
+      existing_tourney.sub_tournaments = tourney_pb.sub_tournaments
+      existing_tourney.put()
 
 
 class TournamentScoresHandler(webapp2.RequestHandler):
@@ -163,6 +179,11 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     full_url = '%s/%s' % (name, url)
     tourney_info = crawler.ParseTournamentInfo(response.content, full_url,
         enum_division, enum_age_bracket)
+
+    # TODO(NEXT): tournament ID needs to match the ID in each game.
+    # Also, each tourney ID in the game links to the division as well,
+    # whereas this is technically the sub-tournament ID, so that
+    # needs to be figured out.
 
     game_infos = crawler.ParseGameInfos(response.content,
         full_url, name, enum_division, enum_age_bracket)

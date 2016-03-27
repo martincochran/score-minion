@@ -212,7 +212,7 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     self.SetHtmlResponse(FAKE_TOURNEY_LANDING_PAGE)
     # Need to add the tourney URL to the URL as a parameter
     response = self.testapp.get(
-        '/tasks/sr/list_tournament_details?name=my_tourney')
+        '/tasks/sr/list_tournament_details?name=my-tourney')
     self.assertEqual(200, response.status_int)
 
     calls = mock_add_queue.mock_calls
@@ -220,10 +220,67 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     self.assertEquals(calls[0], mock.call(
         url='/tasks/sr/crawl_tournament', method='GET',
         params={'url_suffix': 'schedule/Men/College-Men/',
-          'name': 'my_tourney',
+          'name': 'my-tourney',
           'division': 'OPEN',
           'age_bracket': 'COLLEGE'},
         queue_name='score-reporter'))
+
+    key = game_model.tourney_key_full('my-tourney')
+    got_tourney = key.get()
+    want_tourney = game_model.Tournament(
+        key=key,
+        url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, 'my-tourney'),
+        id_str='my-tourney', name='my tourney',
+        sub_tournaments=[game_model.SubTournament(
+          division=scores_messages.Division.OPEN,
+          age_bracket=scores_messages.AgeBracket.COLLEGE)
+        ])
+    self.assertEquals(got_tourney, want_tourney)
+
+    # Crawl it again. There should still only be one tourney in the db.
+    self.SetHtmlResponse(FAKE_TOURNEY_LANDING_PAGE)
+    response = self.testapp.get(
+        '/tasks/sr/list_tournament_details?name=my-tourney')
+    self.assertEqual(200, response.status_int)
+    all_tourneys = game_model.Tournament.query().fetch()
+    self.assertEquals(1, len(all_tourneys))
+
+  @mock.patch.object(taskqueue, 'add')
+  def testParseTourneyLandingPage_updateTourney(self, mock_add_queue):
+    key = game_model.tourney_key_full('my-tourney')
+    empty_tourney = game_model.Tournament(
+        key=key,
+        url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, 'my-tourney'),
+        id_str='my-tourney', name='my tourney')
+    empty_tourney.put()
+
+    self.SetHtmlResponse(FAKE_TOURNEY_LANDING_PAGE)
+    # Need to add the tourney URL to the URL as a parameter
+    response = self.testapp.get(
+        '/tasks/sr/list_tournament_details?name=my-tourney')
+    self.assertEqual(200, response.status_int)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(1, len(calls))
+    self.assertEquals(calls[0], mock.call(
+        url='/tasks/sr/crawl_tournament', method='GET',
+        params={'url_suffix': 'schedule/Men/College-Men/',
+          'name': 'my-tourney',
+          'division': 'OPEN',
+          'age_bracket': 'COLLEGE'},
+        queue_name='score-reporter'))
+
+    got_tourney = key.get()
+    # The tourney should now be updated with the new division that was added.
+    want_tourney = game_model.Tournament(
+        key=key,
+        url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, 'my-tourney'),
+        id_str='my-tourney', name='my tourney',
+        sub_tournaments=[game_model.SubTournament(
+          division=scores_messages.Division.OPEN,
+          age_bracket=scores_messages.AgeBracket.COLLEGE)
+        ])
+    self.assertEquals(got_tourney, want_tourney)
 
   @mock.patch.object(taskqueue, 'add')
   def testParseTourneyLandingPage_badNameParam(self, mock_add_queue):

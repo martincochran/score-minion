@@ -48,6 +48,7 @@ men's sectionals
 FAKE_TOURNEY_LANDING_PAGE = """
 <!doctype html> 
 <body>
+<img id="CT_Main_0_imgEventLogo" src="/assets/1/15/EventLogoDimension/TCTLogo_510x340.jpg" />
 <div class="eventInfo2">
   <b>City: </b>Easton<br /><b>Date: </b>3/31/2016 - 3/31/2016<br />
 </div>
@@ -231,11 +232,15 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
 
     key = game_model.tourney_key_full('my-tourney')
     got_tourney = key.get()
+    url = '%s/%s' % (
+        'https://play.usaultimate.org',
+        'assets/1/15/EventLogoDimension/TCTLogo_510x340.jpg')
     want_tourney = game_model.Tournament(
         key=key,
         url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, 'my-tourney'),
-        start_date=datetime(2016, 1, 31, 0, 3),
-        end_date=datetime(2016, 1, 31, 0, 3),
+        start_date=datetime(2016, 3, 31, 0, 0),
+        image_url_https=url,
+        end_date=datetime(2016, 3, 31, 0, 0),
         id_str='my-tourney', name='my tourney',
         last_modified_at=got_tourney.last_modified_at,
         sub_tournaments=[game_model.SubTournament(
@@ -284,8 +289,8 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
         key=key,
         url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, 'my-tourney'),
         id_str='my-tourney', name='my tourney',
-        start_date=datetime(2016, 1, 31, 0, 3),
-        end_date=datetime(2016, 1, 31, 0, 3),
+        start_date=datetime(2016, 3, 31, 0, 0),
+        end_date=datetime(2016, 3, 31, 0, 0),
         last_modified_at=got_tourney.last_modified_at,
         sub_tournaments=[game_model.SubTournament(
           division=scores_messages.Division.OPEN,

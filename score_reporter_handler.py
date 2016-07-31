@@ -108,6 +108,7 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
 
     crawler = score_reporter_crawler.ScoreReporterCrawler()
     tournaments = crawler.GetDivisions(response.content)
+    image_url = crawler.GetTourneyImageUrl(response.content)
 
     start_date, end_date = crawler.GetDates(response.content)
 
@@ -116,6 +117,7 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
     tourney_pb = game_model.Tournament(
         key=key, id_str=url, url=full_url, name=url.replace('-', ' '),
         start_date=start_date, end_date=end_date,
+        image_url_https=image_url,
         last_modified_at=datetime.utcnow())
     crawl_url = '/tasks/sr/crawl_tournament'
     for tourney_info in tournaments:

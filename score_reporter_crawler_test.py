@@ -69,12 +69,12 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
   def testGetDates(self):
     content = self.testdata.GetLinkedTournamentLandingPage()
     self.assertEqual(
-        (datetime.datetime(2015, 1, 29, 0, 8), datetime.datetime(2015, 1, 30, 0, 8)),
+        (datetime.datetime(2015, 8, 29, 0, 0), datetime.datetime(2015, 8, 30, 0, 0)),
         self.crawler.GetDates(content))
 
     content = self.testdata.GetMultiDivisionTournamentLandingPage()
     self.assertEqual(
-        (datetime.datetime(2015, 1, 22, 0, 5), datetime.datetime(2015, 1, 25, 0, 5)),
+        (datetime.datetime(2015, 5, 22, 0, 0), datetime.datetime(2015, 5, 25, 0, 0)),
         self.crawler.GetDates(content))
 
   def testParseTournamentInfo(self):

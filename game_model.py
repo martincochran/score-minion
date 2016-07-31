@@ -301,12 +301,30 @@ class Tournament(ndb.Model):
 
   last_modified_at = ndb.DateTimeProperty('lu')
 
+  image_url_https = ndb.StringProperty('iu')
+  
+  league = msgprop.EnumProperty(scores_messages.League, 'le')
+
   def ToProto(self):
     """Builds a Tournament protobuf object from this instance."""
     tourney = scores_messages.Tournament()
     tourney.id_str = self.id_str
     tourney.url = self.url
     tourney.name = self.name
+    tourney.image_url_https = self.image_url_https
+    age_brackets = set()
+    divisions = set()
+    for st in self.sub_tournaments:
+      age_brackets.add(st.age_bracket)
+      divisions.add(st.division)
+    tourney.divisions = sorted(list(divisions))
+    tourney.age_brackets = sorted(list(age_brackets))
+    tourney.start_date = self.start_date.strftime(
+        tweets.DATE_PARSE_FMT_STR)
+    tourney.end_date = self.end_date.strftime(
+        tweets.DATE_PARSE_FMT_STR)
+    tourney.last_modified_at = self.last_modified_at.strftime(
+        tweets.DATE_PARSE_FMT_STR)
     return tourney
 
 

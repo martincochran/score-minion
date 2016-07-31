@@ -197,6 +197,19 @@ class ScoreReporterCrawler(object):
     parser.feed(content)
     return parser.get_divisions()
 
+  def GetTourneyImageUrl(self, content):
+    """Returns the image URL for the given tourney landing page.
+
+    Args:
+      content: Full HTML contents of tourney landing page.
+
+    Returns:
+      An https URL string.
+    """
+    parser = TourneyImageUrlParser()
+    parser.feed(content)
+    return parser.get_url()
+
   def GetDates(self, content):
     """Returns the start- and end-dates for a given tournament landing page.
 
@@ -209,16 +222,16 @@ class ScoreReporterCrawler(object):
     """
     one_date_re = '[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}'
     date_re = r'(%s) - (%s)' % (one_date_re, one_date_re)
-    logging.info('re: %s' % date_re)
     ro = re.compile(date_re)
     m = ro.search(content)
-    logging.info('match: %s', m)
     if not m or len(m.groups()) < 2:
       return (None, None)
 
     start_date = m.group(1)
     end_date = m.group(2)
-    date_fmt = '%M/%d/%Y'
+    # TODO: if the start / end date of the tournament has changed, we should
+    # update the tournament object in the data store.
+    date_fmt = '%m/%d/%Y'
     # Parse them into datetime format.
     return (datetime.strptime(start_date, date_fmt),
         datetime.strptime(end_date, date_fmt))
@@ -426,6 +439,32 @@ class DivisionParser(HTMLParser):
     return str_fmt % (div, age_brak, div)
   
 
+class TourneyImageUrlParser(HTMLParser):
+  """Parses the tourney image URL from the page."""
+
+  def __init__(self):
+    HTMLParser.__init__(self)
+    self._url = ''
+
+  def handle_starttag(self, tag, attrs):
+    # Tags of interest
+    tags = ['img']
+    if tag not in tags:
+      return
+    found = False
+    url = ''
+    for key, value in attrs:
+      if key not in ['id', 'src']:
+        continue
+      if key == 'src':
+        url = value
+      if key == 'id':
+        found = True
+    if found:
+      self._url = url
+
+  def get_url(self):
+    return '%s%s' % ('https://play.usaultimate.org', self._url)
 
 class TournamentInfoParser(HTMLParser):
   """Parses the tournament info from the page."""

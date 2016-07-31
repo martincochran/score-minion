@@ -142,16 +142,40 @@ class GameModelTest(unittest.TestCase):
 
   def testTournamentSerialization(self):
     """Verify serialization between Tourney protobuf and ndb classes."""
+    now = datetime.datetime.utcnow()
+    now_txt = now.strftime(tweets.DATE_PARSE_FMT_STR)
     tourney = game_model.Tournament()
     tourney.name = 'name'
     tourney.url = 'url'
     tourney.id_str = '1234'
+    tourney.start_date = now
+    tourney.end_date = now
+    tourney.last_modified_at = now
+    tourney.image_url_https = 'https_url'
+    tourney.sub_tournaments = [
+        game_model.SubTournament(division=scores_messages.Division.OPEN,
+          age_bracket=scores_messages.AgeBracket.NO_RESTRICTION),
+        game_model.SubTournament(division=scores_messages.Division.WOMENS,
+          age_bracket=scores_messages.AgeBracket.COLLEGE),
+    ]
     tpb = tourney.ToProto()
 
     expected_tourney = scores_messages.Tournament()
     expected_tourney.name = 'name'
     expected_tourney.url = 'url'
     expected_tourney.id_str = '1234'
+    expected_tourney.image_url_https = 'https_url'
+    expected_tourney.start_date = now_txt
+    expected_tourney.end_date = now_txt
+    expected_tourney.last_modified_at = now_txt
+    expected_tourney.divisions = [
+        scores_messages.Division.WOMENS,
+        scores_messages.Division.OPEN,
+    ]
+    expected_tourney.age_brackets = [
+        scores_messages.AgeBracket.COLLEGE,
+        scores_messages.AgeBracket.NO_RESTRICTION,
+    ]
     self.assertEquals(expected_tourney, tpb)
 
   def testTeamSerialization(self):

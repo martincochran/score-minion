@@ -80,9 +80,18 @@ class ScoresApi(remote.Service):
     # If the lists haven't been crawled in a while, crawl them.
     response = TournamentsResponse()
     response.tournaments = []
+    league = League.USAU
     for tourney in self._LookupMatchingTourneys(request):
       proto_tourney = tourney.ToProto()
-      response.tournaments.append(proto_tourney)
+      gr = GamesRequest(tournament_id=proto_tourney.id_str)
+      for game in self._LookupMatchingGames(gr):
+        proto_game = game.ToProto()
+        proto_tourney.games.append(proto_game)
+        league = proto_game.league
+      proto_tourney.league = league
+      # Only append the tourney if there are games.
+      if proto_tourney.games:
+        response.tournaments.append(proto_tourney)
     return response
 
   @endpoints.method(GamesRequest, GamesResponse,
@@ -189,7 +198,7 @@ class ScoresApi(remote.Service):
       games_query = games_query.filter(game_model.Game.league == request.league)
     if request.tournament_id:
       games_query = games_query.filter(
-          game_model.Game.tournament_id == request.tournament_id_str)
+          game_model.Game.tournament_id == request.tournament_id)
 
     games_query = games_query.order(-game_model.Game.last_modified_at)
 

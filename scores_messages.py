@@ -118,17 +118,6 @@ class GameSource(messages.Message):
   tweet_text = messages.StringField(5)
 
 
-class Tournament(messages.Message):
-  """Information to represent a tournament."""
-  id_str = messages.StringField(1)
-
-  url = messages.StringField(2)
-
-  name = messages.StringField(3)
-
-  # TODO: add sub-tournaments
-
-
 class Game(messages.Message):
   """Information to represent a game."""
   # Teams involved in the game.
@@ -175,6 +164,29 @@ class TournamentsRequest(messages.Message):
   # Maximum number of tournaments that should be returned. If not specified, the
   # server is responsible for picking a suitable number.
   count = messages.IntegerField(4)
+
+
+class Tournament(messages.Message):
+  """Information to represent a tournament."""
+  id_str = messages.StringField(1)
+
+  url = messages.StringField(2)
+
+  name = messages.StringField(3)
+
+  image_url_https = messages.StringField(4)
+
+  divisions = messages.EnumField(Division, 5, repeated=True)
+
+  age_brackets = messages.EnumField(AgeBracket, 6, repeated=True)
+
+  league = messages.EnumField(League, 11)
+
+  games = messages.MessageField(Game, 7, repeated=True)
+
+  start_date = messages.StringField(8)
+  end_date = messages.StringField(9)
+  last_modified_at = messages.StringField(10)
 
 
 class TournamentsResponse(messages.Message):

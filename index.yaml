@@ -69,6 +69,12 @@ indexes:
   - name: lm
     direction: desc
 
+- kind: Game
+  properties:
+  - name: tid
+  - name: lm
+    direction: desc
+
 - kind: Tweet
   properties:
   - name: an

@@ -304,6 +304,10 @@ class Tournament(ndb.Model):
   image_url_https = ndb.StringProperty('iu')
   
   league = msgprop.EnumProperty(scores_messages.League, 'le')
+  
+  # True iff this tournament has any game where one of the scores is a positive
+  # integer.
+  has_started = ndb.BooleanProperty('hs')
 
   def ToProto(self):
     """Builds a Tournament protobuf object from this instance."""

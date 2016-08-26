@@ -236,12 +236,14 @@ class ScoreReporterCrawler(object):
     return (datetime.strptime(start_date, date_fmt),
         datetime.strptime(end_date, date_fmt))
 
-  def ParseTournamentInfo(self, content, url, division, age_bracket):
+  # TODO: delete? Not being used anywhere.
+  def ParseTournamentInfo(self, content, url, id, division, age_bracket):
     """Parses the tournament info.
 
     Args:
       content: Full HTML contents of tourney landing page.
       url: URL of tourney landing page, relative to EVENT_PREFIX.
+      id: id of tourney landing page.
       division: Text-format of Division protobuf ('OPEN', eg)
       age_bracket: Text-format of AgeBracket protobuf ('COLLEGE', eg)
 
@@ -252,8 +254,6 @@ class ScoreReporterCrawler(object):
     """
     parser = TournamentInfoParser()
     parser.feed(content)
-    tournament_id = 'tourney_%s' % str(uuid.uuid4())
-
     city, state = parser.get_location()
 
     # TODO(P2): make call to Maps API to get geo pt.
@@ -261,7 +261,7 @@ class ScoreReporterCrawler(object):
     #   tournament (or sub-tournament) is new. In crawling a tourney
     #   like nationals, first one division will be added and then
     #   other divisions need to be added correctly.
-    tourney = game_model.Tournament(id_str=tournament_id,
+    tourney = game_model.Tournament(id_str=id,
         name=parser.get_name(),
         sub_tournaments=[game_model.SubTournament(
           division=scores_messages.Division(division),

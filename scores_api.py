@@ -235,7 +235,7 @@ class ScoresApi(remote.Service):
     Returns:
       The list of game_model.Tournament objects that match the criteria.
     """
-    query = game_model.Tournament.query()
+    query = game_model.Tournament.query(game_model.Tournament.has_started == True)
     query = query.order(-game_model.Tournament.start_date)
 
     count = request.count

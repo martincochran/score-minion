@@ -91,10 +91,10 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
         id_str='', name='East New England Men\'s Sectionals', url=url,
         sub_tournaments=[expected_subtourney],
         start_date=start_date, end_date=end_date)
-    actual_sectionals = self.crawler.ParseTournamentInfo(content, url,
+    actual_sectionals = self.crawler.ParseTournamentInfo(content, url, '',
         scores_messages.Division.OPEN,
         scores_messages.AgeBracket.NO_RESTRICTION)
-    self.assertFalse('' == actual_sectionals.id_str)
+    self.assertTrue('' == actual_sectionals.id_str)
     expected_sectionals.id_str = actual_sectionals.id_str
     self.assertEqual(expected_sectionals, actual_sectionals)
 
@@ -105,10 +105,10 @@ class ScoreReporterCrawlerTest(unittest.TestCase):
         id_str='', name='USA Ultimate D-I College Championships', url=url,
         sub_tournaments=[expected_subtourney],
         start_date=start_date, end_date=end_date)
-    actual_nationals = self.crawler.ParseTournamentInfo(content, url,
+    actual_nationals = self.crawler.ParseTournamentInfo(content, url, '',
         scores_messages.Division.OPEN, scores_messages.AgeBracket.COLLEGE)
 
-    self.assertFalse('' == actual_nationals.id_str)
+    self.assertTrue('' == actual_nationals.id_str)
     expected_nationals.id_str = actual_nationals.id_str
     expected_sectionals.sub_tournaments[0].age_bracket = scores_messages.AgeBracket.COLLEGE
     self.assertEqual(expected_nationals, actual_nationals)

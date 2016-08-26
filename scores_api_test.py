@@ -343,6 +343,7 @@ class ScoresApiTest(web_test_base.WebTestBase):
     tourney = game_model.Tournament(
         last_modified_at=datetime.utcnow(),
         key=key,
+        has_started=False,
         start_date=datetime(2016, 5, 31, 0, 0),
         end_date=datetime(2016, 5, 31, 0, 0),
         sub_tournaments=[game_model.SubTournament(
@@ -358,6 +359,7 @@ class ScoresApiTest(web_test_base.WebTestBase):
     tourney = game_model.Tournament(
         last_modified_at=datetime.utcnow(),
         key=key,
+        has_started=False,
         start_date=datetime(2016, 5, 31, 0, 0),
         end_date=datetime(2016, 5, 31, 0, 0),
         sub_tournaments=[game_model.SubTournament(
@@ -376,6 +378,7 @@ class ScoresApiTest(web_test_base.WebTestBase):
     tourney = game_model.Tournament(
         last_modified_at=datetime.utcnow(),
         key=key,
+        has_started=True,
         start_date=datetime(2016, 5, 31, 0, 0),
         end_date=datetime(2016, 5, 31, 0, 0),
         sub_tournaments=[game_model.SubTournament(

@@ -499,7 +499,23 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
         'division': 'OPEN',
         'age_bracket': 'COLLEGE'
     }
-    # Both teams and the game have already been added to the database.
+    # Both teams, the tournament, and the game have already been added to the database.
+    key = game_model.tourney_key_full(params['name'])
+    now = datetime.utcnow()
+    tourney = game_model.Tournament(
+        last_modified_at=datetime(2016, 5, 25, 0, 0),
+        key=key,
+        has_started=False,
+        start_date=datetime(2016, 5, 31, 0, 0),
+        end_date=datetime(2016, 5, 31, 0, 0),
+        sub_tournaments=[game_model.SubTournament(
+          division=scores_messages.Division.OPEN,
+          age_bracket=scores_messages.AgeBracket.COLLEGE)
+        ],
+        url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, params.get('name', '')),
+        id_str=params.get('name', ''), name='my tourney')
+    tourney.put()
+
     game_model.TeamIdLookup(
         score_reporter_id='123',
         score_reporter_tourney_id=['8%3d']).put()
@@ -507,7 +523,7 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
         score_reporter_id='456',
         score_reporter_tourney_id=['g%3d']).put()
     game_info = score_reporter_crawler.GameInfo(
-        '71984', 'tourney_id', 'my_tourney', scores_messages.Division.OPEN,
+        '71984', 'my_tourney', 'my_tourney', scores_messages.Division.OPEN,
         scores_messages.AgeBracket.COLLEGE)
     game_info.status = 'Unknown'
     game = game_model.Game.FromGameInfo(game_info, {})
@@ -521,6 +537,10 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
 
     db_game = game_model.game_key(game).get()
     self.assertEquals(scores_messages.GameStatus.FINAL, db_game.game_status)
+    db_tourney = key.get()
+    # Tournament details should have been updated.
+    self.assertEquals(True, db_tourney.has_started)
+    self.assertTrue(db_tourney.last_modified_at >= now)
  
   @mock.patch.object(score_reporter_handler, 'FetchUsauPage')
   @mock.patch.object(taskqueue, 'add')

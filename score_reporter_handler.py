@@ -123,7 +123,6 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
         last_modified_at=datetime.utcnow())
     crawl_url = '/tasks/sr/crawl_tournament'
     for tourney_info in tournaments:
-      logging.info('tourney_info: %s', tourney_info)
       tourney_pb.sub_tournaments.append(
           game_model.SubTournament(
             division=tourney_info[0],
@@ -133,9 +132,6 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
             'division': tourney_info[0].name,
             'age_bracket': tourney_info[1].name},
           queue_name='score-reporter')
-      # TODO(NEXT): If the tournament hasn't been crawled yet - OR -
-      # the tournament isn't current for some definition of current,
-      # add task to crawl the scores in that tournament.
 
     existing_tourney = key.get()
     if not existing_tourney:
@@ -189,22 +185,26 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       return
 
     crawler = score_reporter_crawler.ScoreReporterCrawler()
-    # TODO(NEXT): look to see if tourney is already in DB. If not, then
-    # parse the tourney info from the page (only want to do
-    # rarely to avoid using Maps API). It's possible that the
-    # tournament exists but the sub-division does not yet exist and
-    # this needs to be handled gracefully (probably by just updating
-    # the division in an atomic read/write transaction).
-    # The last_modified_at time in the tournament DB entry needs to be
-    # updated in this case.
     full_url = '%s/%s' % (name, url)
-    tourney_info = crawler.ParseTournamentInfo(response.content, full_url,
-        enum_division, enum_age_bracket)
-
     game_infos = crawler.ParseGameInfos(response.content,
         full_url, name, enum_division, enum_age_bracket)
+    changed = False
+    non_zero_score = False
     for game_info in game_infos:
-      self._HandleGame(game_info, enum_division, enum_age_bracket)
+      c, nz = self._HandleGame(game_info, enum_division, enum_age_bracket)
+      changed |= c
+      non_zero_score |= nz
+    full_url = '%s%s' % (USAU_URL_PREFIX, name)
+    key = game_model.tourney_key_full(name)
+    existing_tourney = key.get()
+    if not changed:
+      if non_zero_score and existing_tourney and existing_tourney.has_started:
+        return
+    # Only update the tourney if it's already known.
+    if existing_tourney:
+      existing_tourney.last_modified_at = datetime.utcnow()
+      existing_tourney.has_started = non_zero_score
+      existing_tourney.put()
 
   def _HandleGame(self, game_info, division, age_bracket):
     """Check and maybe update the parsed game info object against the datastore .
@@ -213,13 +213,17 @@ class TournamentScoresHandler(webapp2.RequestHandler):
       game_info: score_reporter_crawler.GameInfo object.
       division: scores_messages.Division division of team
       age_bracket: scores_messages.AgeBracket age bracket of team
+    Returns:
+      A (updated, non_zero_score) pair of Booleans. 'updated' is True iff the game
+      was updated in the database. 'non_zero_score' is updated iff any
+      score in the game is greater than 0.
     """
     team_tourney_ids = set()
     home_tourney_id = self._ParseTourneyId(game_info.home_team_link)
     away_tourney_id = self._ParseTourneyId(game_info.away_team_link)
     if not home_tourney_id or not away_tourney_id:
       logging.debug('Ignore game %s since no teams are involved.', game_info)
-      return
+      return False, False
 
     team_tourney_ids.add((home_tourney_id, game_info.home_team_link))
     team_tourney_ids.add((away_tourney_id, game_info.away_team_link))
@@ -246,7 +250,7 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     # tournament-specific ID).
     if not found_all:
       logging.debug('Did not find all teams in db for %s', game_info.tourney_id)
-      return
+      return False, False
 
     # OK - both teams are known and game should be added to DB if it
     # is new or updated.
@@ -254,9 +258,12 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     # Add the Twitter data if known.
     self._AddTwitterTeamInfo(game)
 
+    non_zero_score = game.scores[0] > 0 or games.scores[1] > 0
     db_game = game_model.game_key(game).get()
     if self._ShouldUpdateGame(db_game, game):
       game.put()
+      return True, non_zero_score
+    return False, non_zero_score
 
   def _ShouldUpdateGame(self, db_game, incoming_game):
     """Returns true if any fields in incoming_game are more recent than db_game.

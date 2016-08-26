@@ -75,6 +75,12 @@ indexes:
   - name: lm
     direction: desc
 
+- kind: Tournament
+  properties:
+  - name: hs
+  - name: sd
+    direction: desc
+
 - kind: Tweet
   properties:
   - name: an

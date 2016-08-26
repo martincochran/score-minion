@@ -70,6 +70,8 @@ class ScoreReporterHandler(webapp2.RequestHandler):
 
   def get(self):
     """Loads the main event page and schedules crawling of all tournaments."""
+    # TODO: plumb this further on and crawl fake data.
+    fake_data = self.request.get('fake_data')
     response = FetchUsauPage(self.MAIN_URL)
     if response.status_code != 200:
       WriteError('Response code not 200 - page %s not found' % self.MAIN_URL,
@@ -139,7 +141,14 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
     if not existing_tourney:
       tourney_pb.put()
       return
+    changed = False
     if len(tourney_pb.sub_tournaments) > len(existing_tourney.sub_tournaments):
+      changed = True
+    if existing_tourney.start_date != tourney_pb.start_date:
+      changed = True
+    if existing_tourney.end_date != tourney_pb.end_date:
+      changed = True
+    if changed:
       existing_tourney.sub_tournaments = tourney_pb.sub_tournaments
       existing_tourney.last_modified_at = tourney_pb.last_modified_at
       existing_tourney.start_date = tourney_pb.start_date

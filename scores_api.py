@@ -83,11 +83,27 @@ class ScoresApi(remote.Service):
     league = League.USAU
     for tourney in self._LookupMatchingTourneys(request):
       proto_tourney = tourney.ToProto()
-      gr = GamesRequest(tournament_id=proto_tourney.id_str)
+      gr = GamesRequest(
+          tournament_id=proto_tourney.id_str,
+          count=200)
       for game in self._LookupMatchingGames(gr):
         proto_game = game.ToProto()
+        # Don't worry about games that haven't started yet.
+        if proto_game.scores[0] <= 0 and proto_game.scores[1] <= 0:
+          continue
         proto_tourney.games.append(proto_game)
         league = proto_game.league
+
+        # Populate the team info in the response.
+        # TODO: investigate (likely high) impact on latency
+        for team in proto_game.teams:
+          self._AddAccountInfo(team.twitter_account,
+              team.score_reporter_account)
+
+        source = proto_game.last_update_source
+        if source:
+          self._AddAccountInfo(source.twitter_account, None)
+
       proto_tourney.league = league
       # Only append the tourney if there are games.
       if proto_tourney.games:
@@ -122,7 +138,8 @@ class ScoresApi(remote.Service):
             team.score_reporter_account)
 
       source = proto_game.last_update_source
-      self._AddAccountInfo(source.twitter_account, None)
+      if source:
+        self._AddAccountInfo(source.twitter_account, None)
 
     return response
 
@@ -208,7 +225,7 @@ class ScoresApi(remote.Service):
     return games_query.fetch(count)
 
   @staticmethod
-  def _LookupMatchingTourneys(request, num=10):
+  def _LookupMatchingTourneys(request, num=25):
     """Returns a set of tournaments from the DB matching the request criteria.
 
     Args:

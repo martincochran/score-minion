@@ -299,6 +299,53 @@ class ScoreReporterHandlerTest(web_test_base.WebTestBase):
     self.assertEquals(got_tourney, want_tourney)
 
   @mock.patch.object(taskqueue, 'add')
+  def testParseTourneyLandingPage_updateTourneyNewDate(self, mock_add_queue):
+    key = game_model.tourney_key_full('my-tourney')
+    wrong_date_tourney = game_model.Tournament(
+        last_modified_at=datetime.utcnow(),
+        key=key,
+        start_date=datetime(2016, 5, 31, 0, 0),
+        end_date=datetime(2016, 5, 31, 0, 0),
+        sub_tournaments=[game_model.SubTournament(
+          division=scores_messages.Division.OPEN,
+          age_bracket=scores_messages.AgeBracket.COLLEGE)
+        ],
+        url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, 'my-tourney'),
+        id_str='my-tourney', name='my tourney')
+    wrong_date_tourney.put()
+
+    self.SetHtmlResponse(FAKE_TOURNEY_LANDING_PAGE)
+    # Need to add the tourney URL to the URL as a parameter
+    response = self.testapp.get(
+        '/tasks/sr/list_tournament_details?name=my-tourney')
+    self.assertEqual(200, response.status_int)
+
+    calls = mock_add_queue.mock_calls
+    self.assertEquals(1, len(calls))
+    self.assertEquals(calls[0], mock.call(
+        url='/tasks/sr/crawl_tournament', method='GET',
+        params={'url_suffix': 'schedule/Men/College-Men/',
+          'name': 'my-tourney',
+          'division': 'OPEN',
+          'age_bracket': 'COLLEGE'},
+        queue_name='score-reporter'))
+
+    got_tourney = key.get()
+    # The tourney should now be updated with the new division that was added.
+    want_tourney = game_model.Tournament(
+        key=key,
+        url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, 'my-tourney'),
+        id_str='my-tourney', name='my tourney',
+        start_date=datetime(2016, 3, 31, 0, 0),
+        end_date=datetime(2016, 3, 31, 0, 0),
+        last_modified_at=got_tourney.last_modified_at,
+        sub_tournaments=[game_model.SubTournament(
+          division=scores_messages.Division.OPEN,
+          age_bracket=scores_messages.AgeBracket.COLLEGE)
+        ])
+    self.assertEquals(got_tourney, want_tourney)
+
+  @mock.patch.object(taskqueue, 'add')
   def testParseTourneyLandingPage_badNameParam(self, mock_add_queue):
     # Need to add the tourney name as a parameter. If it's not
     # present no crawling should take place.

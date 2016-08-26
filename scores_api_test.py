@@ -33,6 +33,7 @@ from endpoints import api_config
 
 import game_model
 import score_reporter_crawler
+import score_reporter_handler
 import tweets
 
 # Mock out the endpoints method
@@ -330,6 +331,70 @@ class ScoresApiTest(web_test_base.WebTestBase):
     self.assertEquals('tourney_id',
         response.score_reporter_source.score_reporter_url)
     self.assertEquals(game_id, response.game.id_str)
+
+  @mock.patch.object(app_identity, 'app_identity')
+  @mock.patch.object(taskqueue, 'add')
+  def testGetTournaments(self, mock_add_queue, mock_app_identity):
+    """Test non-trivial functionality of GetTournaments."""
+    # Add 3 tournaments.
+    # 1 with no games.
+    name = 'no-games-tourney'
+    key = game_model.tourney_key_full(name)
+    tourney = game_model.Tournament(
+        last_modified_at=datetime.utcnow(),
+        key=key,
+        start_date=datetime(2016, 5, 31, 0, 0),
+        end_date=datetime(2016, 5, 31, 0, 0),
+        sub_tournaments=[game_model.SubTournament(
+          division=scores_messages.Division.OPEN,
+          age_bracket=scores_messages.AgeBracket.COLLEGE)
+        ],
+        url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, name),
+        id_str=name, name=name)
+    tourney.put()
+    # 1 with all games that have not started.
+    name = 'not-started-tourney'
+    key = game_model.tourney_key_full(name)
+    tourney = game_model.Tournament(
+        last_modified_at=datetime.utcnow(),
+        key=key,
+        start_date=datetime(2016, 5, 31, 0, 0),
+        end_date=datetime(2016, 5, 31, 0, 0),
+        sub_tournaments=[game_model.SubTournament(
+          division=scores_messages.Division.OPEN,
+          age_bracket=scores_messages.AgeBracket.COLLEGE)
+        ],
+        url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, name),
+        id_str=name, name=name)
+    tourney.put()
+    game_model.Game(scores=[0, 0], tournament_id=name, id_str='a',
+        created_at=datetime.utcnow()).put()
+
+    # 1 with in-progress games and one game that hasn't started.
+    name = 'in-progress-tourney'
+    key = game_model.tourney_key_full(name)
+    tourney = game_model.Tournament(
+        last_modified_at=datetime.utcnow(),
+        key=key,
+        start_date=datetime(2016, 5, 31, 0, 0),
+        end_date=datetime(2016, 5, 31, 0, 0),
+        sub_tournaments=[game_model.SubTournament(
+          division=scores_messages.Division.OPEN,
+          age_bracket=scores_messages.AgeBracket.COLLEGE)
+        ],
+        url='%s%s' % (score_reporter_handler.USAU_URL_PREFIX, name),
+        id_str=name, name=name)
+    tourney.put()
+    game_model.Game(scores=[0, 0], tournament_id=name, id_str='b',
+        created_at=datetime.utcnow()).put()
+    game_model.Game(scores=[1, 2], tournament_id=name, id_str='c',
+        created_at=datetime.utcnow()).put()
+
+    request = scores_messages.TournamentsRequest()
+    response = self.api.GetTournaments(request)
+    self.assertEquals(1, len(response.tournaments))
+    self.assertEquals(name, response.tournaments[0].name)
+    self.assertEquals(1, len(response.tournaments[0].games))
 
 
 if __name__ == '__main__':

@@ -144,7 +144,10 @@ class TournamentLandingPageHandler(webapp2.RequestHandler):
       changed = True
     if existing_tourney.end_date != tourney_pb.end_date:
       changed = True
+    if existing_tourney.image_url_https != tourney_pb.image_url_https:
+      changed = True
     if changed:
+      existing_tourney.image_url_https = tourney_pb.image_url_https
       existing_tourney.sub_tournaments = tourney_pb.sub_tournaments
       existing_tourney.last_modified_at = tourney_pb.last_modified_at
       existing_tourney.start_date = tourney_pb.start_date

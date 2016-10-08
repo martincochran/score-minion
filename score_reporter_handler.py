@@ -261,7 +261,7 @@ class TournamentScoresHandler(webapp2.RequestHandler):
     # Add the Twitter data if known.
     self._AddTwitterTeamInfo(game)
 
-    non_zero_score = game.scores[0] > 0 or games.scores[1] > 0
+    non_zero_score = game.scores[0] > 0 or game.scores[1] > 0
     db_game = game_model.game_key(game).get()
     if self._ShouldUpdateGame(db_game, game):
       game.put()

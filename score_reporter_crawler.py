@@ -561,7 +561,36 @@ class TournamentInfoParser(HTMLParser):
   def get_location(self):
     return (self._city, self._state)
 
+# Format of in-progress, not-finished game:
+# <div class="top_area ">
+#<span class="isName">
+  #<span class="team adjust-data" data-type="game-team-home">                P1 of Pool Play Pool A</span>
+#</span>
+#<span class="isScore">
+  #<span class="score adjust-data" data-type="game-score-home">0</span>
+#</span>
+#</div>
 
+# Format of completed game:
+# <div class="top_area  winner">
+#<span class="isName">
+  #<span class="team adjust-data" data-type="game-team-home"><a href="/events/teams/?EventTeamId=UmOVX%2f2VU%2b6G34GtSee5deqrmmVNWe2Xy2rM2O0xxYs%3d">Truck Stop (1)</a></span>
+#</span>
+#<span class="isScore">
+  #<span class="score adjust-data" data-type="game-score-home">12</span>
+#</span>
+#</div>
+#<div class="btm_area  loser">
+#<span class="isName">
+  #<span class="team adjust-data" data-type="game-team-away"><a href="/events/teams/?EventTeamId=YfOtNZKRUKAptWb%2bQWgK20l3edd1LQ%2b3jBi6F%2bO8Mkk%3d">Johnny Bravo (5)</a></span>
+#</span>
+#<span class="isScore">
+  #<span class="score adjust-data" data-type="game-score-away">11</span>
+#</span>
+#/div>
+# TODO: add indicator to UI to show this status.
+
+ 
 class GameInfosParser(HTMLParser):
   """Parses the scores from each game."""
 

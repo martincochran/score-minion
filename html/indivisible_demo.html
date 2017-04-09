@@ -1,0 +1,90 @@
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Marker Clustering</title>
+    <style>
+      /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+      #map {
+        height: 100%;
+      }
+      /* Optional: Makes the sample page fill the window. */
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script>window.twttr = (function(d, s, id) {
+      var js, fjs = d.getElementsByTagName(s)[0],
+        t = window.twttr || {};
+      if (d.getElementById(id)) return t;
+      js = d.createElement(s);
+      js.id = id;
+      js.src = "https://platform.twitter.com/widgets.js";
+      fjs.parentNode.insertBefore(js, fjs);
+
+      t._e = [];
+      t.ready = function(f) {
+        t._e.push(f);
+      };
+
+      return t;
+    }(document, "script", "twitter-wjs"));</script>
+
+    <script>
+
+      var map;
+      function initMap() {
+
+        map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 5,
+          center: {lat: 38.420, lng: -99.305}
+        });
+        var xhttp = new XMLHttpRequest();
+        xhttp.open("GET", "http://localhost:8080/_ah/api/scores/v1/tweets?count=50", false);
+        xhttp.send();
+
+        var tweets = xhttp.responseText;
+        var parsed_tweets = JSON.parse(tweets);
+
+        // Add tweet markers to the map.
+        var markers = parsed_tweets.tweets.map(function(tweet, i) {
+          var twt = JSON.parse(tweet);
+          var text = '<div class="infowindow-content"><blockquote class="twitter-tweet" lang="en"><p>' + twt.text + ' </p>&mdash; Nichim Izazvan (@NichimIzazvan) <a href="https://twitter.com/'+ twt.user.screen_name +'/status/'+ twt.id_str +'">January 3, 2014</a></blockquote></div>';
+          var infowindow = new google.maps.InfoWindow({
+            content: text,
+            maxWidth: 300,
+          });
+
+          // Make up the position if the location is not given.
+          var marker = new google.maps.Marker({
+            position: {lat: 28.420 + Math.random()*20, lng: -109.305 + Math.random()*20},
+            icon: twt.user.profile_image_url_https,
+          });
+          marker.addListener('click', function() {
+            infowindow.open(map, marker);
+          });
+          google.maps.event.addListener(infowindow, 'domready', function(event) {
+            twttr.widgets.load();
+          });
+  
+          return marker;
+        });
+
+        // Add a marker clusterer to manage the markers.
+        var markerCluster = new MarkerClusterer(map, markers,
+            {imagePath: 'https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/m'});
+      }
+    </script>
+    <script src="https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/markerclusterer.js">
+    </script>
+    <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD_7uPx5QwrttBT9o4O7tZSbUaI3NTNqMc&callback=initMap">
+    </script>
+  </body>
+</html>

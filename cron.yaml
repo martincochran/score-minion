@@ -12,6 +12,7 @@ cron:
   url: /tasks/crawl_all_users
   schedule: every friday 09:00
 
+# TODO: configure # of retries...
 - description: Update score reporter
   url: /tasks/sr/crawl
   schedule: every monday 20:00

@@ -40,6 +40,8 @@ from scores_messages import League
 from scores_messages import Team
 from scores_messages import TournamentsRequest
 from scores_messages import TournamentsResponse
+from scores_messages import TweetsRequest
+from scores_messages import TweetsResponse
 from scores_messages import GamesResponse
 from scores_messages import TwitterAccount
 
@@ -192,6 +194,50 @@ class ScoresApi(remote.Service):
         break
 
     return response
+
+  @endpoints.method(TweetsRequest, TweetsResponse,
+                    path='tweets', http_method='GET')
+  def GetTweets(self, request):
+    """Exposes an API endpoint to retrieve the latest tournaments.
+
+    Can be referenced on dev server by using the following URL:
+    http://localhost:8080/_ah/api/scores/v1/tweets
+
+    Args:
+        request: An instance of TweetsRequest parsed from the API request.
+    Returns:
+        An instance of TweetsResponse with the set of tweets matching
+        the request parameters.
+    """
+    response = TweetsResponse()
+    response.tweets = []
+    for tweet in self._LookupTweets(request):
+      # Only return tweets with geo-coded response
+      #if not tweet.geo:
+        #continue
+      response.tweets.append(tweet.original_json)
+    return response
+
+  @staticmethod
+  def _LookupTweets(request, num=100, list_id='850764666422804480'):
+    """Returns a set of tweets from the DB matching the request criteria.
+
+    Args:
+      request: GamesRequest object specifying what games to look up
+      num: Number of games to retrieve from the DB
+
+    Returns:
+      The list of game_model.Game objects that match the criteria.
+    """
+    tweet_query = tweets.Tweet.query()
+    tweet_query = tweet_query.filter(tweets.Tweet.from_list == list_id)
+    tweet_query = tweet_query.order(-tweets.Tweet.created_at)
+    
+    count = request.count
+    if not count:
+      count = num
+    return tweet_query.fetch(count)
+
 
   @staticmethod
   def _LookupMatchingGames(request, num=10):

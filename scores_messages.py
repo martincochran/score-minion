@@ -197,6 +197,25 @@ class TournamentsResponse(messages.Message):
   tournaments = messages.MessageField(Tournament, 2, repeated=True)
 
 
+class TweetsRequest(messages.Message):
+  """ProtoRPC representation of a request for tweets."""
+  # Pagination token returned in a prior TweetsResponse. To paginate through
+  # a series of results, this should be passed in subsequent calls to
+  # GetGames.
+  pagination_token = messages.StringField(1)
+
+  # Maximum number of tweets that should be returned. If not specified, the
+  # server is responsible for picking a suitable number.
+  count = messages.IntegerField(4)
+
+
+class TweetsResponse(messages.Message):
+  """Response for GetTweets."""
+  pagination_token = messages.StringField(1)
+
+  # The set of tweets. Each field can be parsed as a JSON string.
+  tweets = messages.StringField(2, repeated=True)
+
 
 class GamesRequest(messages.Message):
   """ProtoRPC representation of a request for games."""

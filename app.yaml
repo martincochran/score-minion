@@ -71,6 +71,10 @@ handlers:
 - url: /_ah/spi/.*
   script: scores_api.app
 
+## Indivisble demo
+- url: /demo/.*
+  script: ind_demo.app
+
 # Main handler
 - url: .*
   script: main.app
